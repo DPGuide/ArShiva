@@ -1,21 +1,8 @@
 ***crystal_numbers.txt***
 
-U+3f0f | Bytes: 0xf 0x3f
-U+3cc0 | Bytes: 0xc0 0x3c
-U+0fcf | Bytes: 0xcf 0xf [Tibetan]
-U+30ff | Bytes: 0xff 0x30 [Japanese]
-U+3ccf | Bytes: 0xcf 0x3c
-U+3ff0 | Bytes: 0xf0 0x3f
-U+30cf | Bytes: 0xcf 0x30 [Japanese]
-U+0fc3 | Bytes: 0xc3 0xf [Tibetan]
-U+cc3f | Bytes: 0x3f 0xcc [Korean]
-U+0fff | Bytes: 0xff 0xf [Tibetan]
-U+cfff | Bytes: 0xff 0xcf [Korean]
-U+0f0f | Bytes: 0xf 0xf [Tibetan]
-....
-.
-.
-.
-.
-.
-.
+<img width="321" height="508" alt="image" src="https://github.com/user-attachments/assets/d0592ede-ed5e-4a3e-9b55-7426acde7494" />
+
+<img width="1278" height="715" alt="image" src="https://github.com/user-attachments/assets/6cb495f8-e5f1-463b-a0e4-e3af8f764bae" />
+
+<img width="1276" height="716" alt="image" src="https://github.com/user-attachments/assets/58c569e7-75f3-4e59-81d6-90138c288bff" />
+
