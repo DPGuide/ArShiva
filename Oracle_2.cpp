@@ -1,6 +1,7 @@
 // =========================================================
 // Äther-Oracle of Delphi
 // Copyright to my SELF Tobias .P.D Schneider
+// my intellectual property
 // =========================================================
 #include <windows.h>
 #include <commctrl.h>
@@ -674,3 +675,4 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     return (int)msg.wParam;
 
 }
+
