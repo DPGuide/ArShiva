@@ -1,5 +1,8 @@
 ***Radionics/Orgonomy technology with a modern ADC. 🎯***
 
+***Currently, only Gerg crystals are recognized; 
+I haven't filtered out other signatures yet. I don't support fakers!***
+
 ***SETUP***
 + ***crystal_numbers.txt***
 
