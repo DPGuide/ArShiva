@@ -5,6 +5,10 @@ I haven't filtered out other signatures yet. I don't support fakers!
 if you use other crystalls or metals or what ever the Oracle should be gave unknow name etc..**
 <img width="507" height="75" alt="image" src="https://github.com/user-attachments/assets/38be9e41-ba73-4474-bf11-163b3264fdae" />
 
+***perfectly symmetrical kaleidoscope***
+
+<img width="680" height="681" alt="image" src="https://github.com/user-attachments/assets/f4d9ba36-9394-4d1d-8da6-64353cbadda7" />
+
 
 ***SETUP***
 + ***crystal_numbers.txt***
