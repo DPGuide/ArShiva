@@ -1,7 +1,10 @@
 ***Radionics/Orgonomy technology with a modern ADC. 🎯***
 
-***Currently, only Gerg crystals are recognized; 
-I haven't filtered out other signatures yet. I don't support fakers!***
+***Currently, only rock crystals are recognized;
+I haven't filtered out other signatures yet. I don't support fakers!
+if you use other crystalls or metals or what ever the Oracle should be gave unknow name etc..**
+<img width="507" height="75" alt="image" src="https://github.com/user-attachments/assets/38be9e41-ba73-4474-bf11-163b3264fdae" />
+
 
 ***SETUP***
 + ***crystal_numbers.txt***
