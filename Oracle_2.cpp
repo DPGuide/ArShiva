@@ -1,6 +1,6 @@
 // =========================================================
-// Äther-Oracle - Das vereinte Kristall-Orakel
-// Kompilieren: g++ -o oracle.exe oracle_2.cpp -mwindows -lcomdlg32 -luser32 -lgdi32
+// Äther-Oracle of Delphi
+// Copyright to my SELF Tobias .P.D Schneider
 // =========================================================
 #include <windows.h>
 #include <commctrl.h>
@@ -672,4 +672,5 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
         DispatchMessage(&msg);
     }
     return (int)msg.wParam;
+
 }
