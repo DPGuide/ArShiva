@@ -1,9 +1,9 @@
 // =========================================================
-// Äther-Oracle of Delphi
-// Copyright to my SELF Tobias .P.D Schneider
-// my intellectual property
+// Äther-Oracle - Das vereinte Kristall-Orakel
+// Kompilieren: g++ -o oracle.exe oracle_2.cpp -mwindows -lcomdlg32 -luser32 -lgdi32
 // =========================================================
 #include <windows.h>
+#include <gdiplus.h>
 #include <commctrl.h>
 #include <fstream>
 #include <sstream>
@@ -20,6 +20,25 @@
 #pragma comment(lib, "comdlg32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "gdiplus.lib")
+// GANZ NACH OBEN DAMIT:
+int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
+    UINT num = 0, size = 0;
+    Gdiplus::GetImageEncodersSize(&num, &size);
+    if (size == 0) return -1;
+    Gdiplus::ImageCodecInfo* pImageCodecInfo = (Gdiplus::ImageCodecInfo*)(malloc(size));
+    if (pImageCodecInfo == NULL) return -1;
+    Gdiplus::GetImageEncoders(num, size, pImageCodecInfo);
+    for (UINT j = 0; j < num; ++j) {
+        if (wcscmp(pImageCodecInfo[j].MimeType, format) == 0) {
+            *pClsid = pImageCodecInfo[j].Clsid;
+            free(pImageCodecInfo);
+            return j;
+        }
+    }
+    free(pImageCodecInfo);
+    return -1;
+}
 
 // --- DATENSTRUKTUREN ---
 
@@ -77,6 +96,24 @@ private:
             }
         });
     }
+// Hilfsfunktion: Sucht den passenden Bild-Encoder (z.B. "image/png")
+int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
+    UINT num = 0, size = 0;
+    Gdiplus::GetImageEncodersSize(&num, &size);
+    if (size == 0) return -1;
+    Gdiplus::ImageCodecInfo* pImageCodecInfo = (Gdiplus::ImageCodecInfo*)(malloc(size));
+    if (pImageCodecInfo == NULL) return -1;
+    Gdiplus::GetImageEncoders(num, size, pImageCodecInfo);
+    for (UINT j = 0; j < num; ++j) {
+        if (wcscmp(pImageCodecInfo[j].MimeType, format) == 0) {
+            *pClsid = pImageCodecInfo[j].Clsid;
+            free(pImageCodecInfo);
+            return j;
+        }
+    }
+    free(pImageCodecInfo);
+    return -1;
+}
 
     void InitDictionary() {
     // --- CJK / Kristall-Basis ---
@@ -283,6 +320,84 @@ public:
 
         return ""; 
     }
+	std::string GenerateAetherMandala(const std::vector<uint16_t>& data, const std::string& originalFilename) {
+    using namespace Gdiplus;
+
+    if (data.size() < 10) return "";
+
+    int width = 1000;
+    int height = 1000;
+    float cx = width / 2.0f;
+    float cy = height / 2.0f;
+
+    // Erstelle ein unsichtbares Canvas im RAM
+    Bitmap bmp(width, height, PixelFormat32bppARGB);
+    Graphics g(&bmp);
+
+    // Ganz wichtig für fließende, mystische Linien: Anti-Aliasing aktivieren!
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
+
+    // Hintergrund: Das gleiche mystische Dunkelgrau wie dein UI
+    g.Clear(Color(255, 15, 15, 20));
+
+    // Pinsel definieren: Ein halbtransparentes Cyan für Rauschen, Gold für Bergkristall
+    Pen cyanPen(Color(100, 0, 220, 255), 1.5f); 
+    Pen goldPen(Color(200, 255, 215, 0), 2.0f); 
+
+    // Wir berechnen die Punkte für EINEN Strang des Mandalas
+    std::vector<PointF> basePoints;
+    
+    // Wir nehmen z.B. die ersten 720 Datenpunkte (für eine schöne Dichte)
+    size_t pointsToUse = std::min((size_t)720, data.size());
+    
+    for (size_t i = 0; i < pointsToUse; i++) {
+        // Wir ziehen die 2-Bit Struktur heraus, um die "Ebene" zu bestimmen
+        int state = (data[i] >> 6) & 0x03; // Gibt 0, 1, 2 oder 3
+        int rawVariance = data[i] & 0xFF;  // Für ein bisschen natürliches Chaos
+
+        // Radius-Berechnung (Entfernung vom Zentrum)
+        // State 0 ist innen, State 3 schlägt weit nach außen aus
+        float radius = 50.0f + (state * 100.0f) + (rawVariance / 2.0f);
+
+        // Winkel-Berechnung: Wir wickeln die Zeitachse als Spirale auf
+        // 3 Umdrehungen verteilt auf die verfügbaren Punkte
+        float angleDeg = (i * (360.0f * 3.0f / pointsToUse)); 
+        float angleRad = angleDeg * (3.14159265f / 180.0f); // Umrechnung in Bogenmaß
+
+        float px = cx + radius * cos(angleRad);
+        float py = cy + radius * sin(angleRad);
+        
+        basePoints.push_back(PointF(px, py));
+    }
+
+    // === HIER ENTSTEHT DIE MAGIE DER SYMMETRIE ===
+    // Wir zeichnen den Strang 8 Mal, jedes Mal um 45 Grad gedreht
+    for (int sym = 0; sym < 8; sym++) {
+        g.ResetTransform();
+        // GDI+ Rotation funktioniert vom Nullpunkt (0,0), also verschieben wir das Zentrum
+        g.TranslateTransform(cx, cy);
+        g.RotateTransform(sym * 45.0f); // 8-fache Symmetrie (360 / 8 = 45)
+        g.TranslateTransform(-cx, -cy);
+        for (size_t i = 1; i < basePoints.size(); i++) {
+            // Wenn der Datenpunkt im Bergkristall-Fenster (0x3C00) liegt, leuchtet er Gold!
+            if (data[i] >= 0x3C00 && data[i] <= 0x3CFF) {
+                g.DrawLine(&goldPen, basePoints[i-1], basePoints[i]);
+            } else {
+                g.DrawLine(&cyanPen, basePoints[i-1], basePoints[i]);
+            }
+        }
+    }
+	std::string outPath = originalFilename + "_mandala.png";
+    CLSID pngClsid;
+    if (GetEncoderClsid(L"image/png", &pngClsid) != -1) {
+        int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, &outPath[0], (int)outPath.size(), NULL, 0);
+        std::wstring wOutPath(sizeNeeded, 0);
+        MultiByteToWideChar(CP_UTF8, 0, &outPath[0], (int)outPath.size(), &wOutPath[0], sizeNeeded);
+
+        bmp.Save(wOutPath.c_str(), &pngClsid, NULL);
+    }
+	return outPath;
+}
 
 private:
     std::string GenerateReport(const std::string& filename, const std::vector<uint16_t>& data) {
@@ -412,7 +527,6 @@ private:
         if (validGlyphsFound == 0) {
             report << "No known categories or dictionary entries found (only background noise).\r\n";
         }
-
         return report.str();
     }
 
@@ -456,7 +570,7 @@ private:
 };
 
 // --- GLOBALE VARIABLEN ---
-HWND hEdit, hStatus, hBtnAnalyze, hBtnBrowse;
+HWND hEdit, hStatus, hBtnAnalyze, hBtnBrowse, hBtnMandala;
 char g_filename[260] = {0};
 HFONT hFont;
 EtherAnalyzer analyzer;
@@ -546,6 +660,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
                 180, 20, 150, 35, hwnd, (HMENU)2, NULL, NULL);
             SendMessage(hBtnAnalyze, WM_SETFONT, (WPARAM)hFont, TRUE);
+			
+			hBtnMandala = CreateWindowExW(0, L"BUTTON", L"DRAW MANDALA",
+                WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+                340, 20, 150, 35, hwnd, (HMENU)3, NULL, NULL);
+            SendMessage(hBtnMandala, WM_SETFONT, (WPARAM)hFont, TRUE);
             
             hStatus = CreateWindowExW(0, L"STATIC", L"Ready. Please attach a file. w\x00E4" L"hlen.",
                 WS_VISIBLE | WS_CHILD | SS_LEFT,
@@ -628,6 +747,28 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_COMMAND:
             if (LOWORD(wParam) == 1) BrowseFile(hwnd);
             if (LOWORD(wParam) == 2) AnalyzeFile();
+            if (LOWORD(wParam) == 3) {
+                if (strlen(g_filename) == 0) {
+                    SetWindowTextW(hStatus, L"Please select a file first!");
+                    break;
+                }
+                SetWindowTextW(hStatus, L"Drawing Aether Mandala... Please wait.");
+                std::ifstream in(g_filename, std::ios::binary);
+                if (!in) break;
+                std::vector<uint16_t> data;
+                char buf[2];
+                while (in.read(buf, 2)) {
+                    data.push_back((uint8_t)buf[0] | ((uint8_t)buf[1] << 8));
+                }
+                in.close();
+                if (!data.empty()) {
+                    std::string savedPath = analyzer.GenerateAetherMandala(data, g_filename);
+                    if (!savedPath.empty()) {
+                        SetWindowTextA(hStatus, ("Mandala rendered! Opened: " + savedPath).c_str());
+                        ShellExecuteA(NULL, "open", savedPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+                    }
+                }
+            }
             return 0;
             
         case WM_DESTROY:
@@ -666,6 +807,10 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
         CW_USEDEFAULT, CW_USEDEFAULT, 1280, 720,
         NULL, NULL, hInst, NULL);
+		// --- GDI+ ENGINE HOCHFAHREN ---
+    Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+    ULONG_PTR gdiplusToken;
+    Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
     
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
@@ -673,6 +818,4 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
         DispatchMessage(&msg);
     }
     return (int)msg.wParam;
-
 }
-
