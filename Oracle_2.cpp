@@ -44,9 +44,31 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     free(pImageCodecInfo);
     return -1;
 }
-
 // --- DATENSTRUKTUREN ---
+enum WaterState { DEAD_WATER, LIVING_WATER, TRANSITIONING, UNKNOWN };
+WaterState AnalyzeWaterState(const std::vector<uint16_t>& data, int& outDeadScore, int& outLivingScore) {
+    outDeadScore = 0;
+    outLivingScore = 0;
 
+    for (uint16_t glyph : data) {
+        if (glyph >= 0x5A5A && glyph <= 0x64BB) {
+            outDeadScore++;
+        }
+        else if (glyph >= 0x79E1 && glyph <= 0x7EF6) {
+            outLivingScore++;
+        }
+    }
+
+    // Wenn AUCH NUR EIN lebendiges Signal da ist, gewinnt das Leben!
+    if (outLivingScore > 0) {
+        return LIVING_WATER; 
+    } 
+    else if (outDeadScore > 0) {
+        return DEAD_WATER;
+    }
+
+    return UNKNOWN;
+}
 struct CrystalProfile {
     const char* name;
     const char* element;
@@ -471,7 +493,44 @@ private:
             report << "🔮 DOMINANT CRYSTAL: Unknown\r\n";
             report << "   (No resonances could be detected in the known band 0x3C00 - 0x3CFF be measured.)\r\n\r\n";
         }
-        // 2. Energetische Analyse
+		// 2.1 Wasser-Matrix Analyse
+		// Wir bereiten zwei leere Variablen vor, die die Funktion für uns füllen soll
+		int deadScore = 0;
+		int livingScore = 0;
+
+		// Jetzt rufen wir die Funktion mit allen DREI Argumenten auf:
+		WaterState waterState = AnalyzeWaterState(data, deadScore, livingScore); 
+
+		// Und hier geben wir das Wasser-Ergebnis aus (inklusive der neuen Debug-Zeile!)
+		report << "🌊 WATER MATRIX ANALYSIS:\r\n";
+		report << "   [DEBUG] Dead Hits: " << deadScore << " | Living Hits: " << livingScore << "\r\n";
+		report << "🌊 WATER MATRIX ANALYSIS:\r\n";
+		if (waterState == LIVING_WATER) {
+			report << "   Status: LIVING WATER (Silk Matrix)\r\n";
+			report << "   Resonance: High Frequency (0x79E1 to 0x7EF6)\r\n";
+			report << "   Characteristic: Coherence, Harmony & Self-Organization\r\n\r\n";
+			report << "📜 ALCHEMICAL FINDING:\r\n";
+			report << "   \"The water has regained its geometric memory. The Silk Spiral is active.\"\r\n\r\n";
+		} 
+		else if (waterState == DEAD_WATER) {
+			report << "   Status: DEAD WATER (Stagnant Grid)\r\n";
+			report << "   Resonance: Low Frequency Dissonance (0x5A5A to 0x64BB)\r\n";
+			report << "   Characteristic: Rigidity, Pressure & Structural Chaos\r\n\r\n";
+			report << "📜 ALCHEMICAL FINDING:\r\n";
+			report << "   \"Water structure is rigid. The flow memory is suppressed by pipe pressure.\"\r\n\r\n";
+		} 
+		else if (waterState == TRANSITIONING) {
+			report << "   Status: TRANSITIONING (Phase Shift)\r\n";
+			report << "   Resonance: Mixed Frequencies / High Chaos\r\n";
+			report << "   Characteristic: Breakdown of old structures\r\n\r\n";
+			report << "📜 ALCHEMICAL FINDING:\r\n";
+			report << "   \"Turbulence detected. The old matrix is breaking down to form anew.\"\r\n\r\n";
+		} 
+		else {
+			report << "   Status: UNKNOWN / NEUTRAL\r\n";
+			report << "   (No clear water signature or structure could be detected.)\r\n\r\n";
+		}
+        // 2.2 Energetische Analyse
         report << "📊 ENERGETIC ANALYSIS:\r\n";
         double avg = 0, variance = 0;
         for (auto g : data) avg += g;
