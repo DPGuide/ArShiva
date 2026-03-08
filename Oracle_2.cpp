@@ -17,6 +17,11 @@
 #include "resource.h"
 #include <algorithm>
 
+#define ID_BUTTON_ANALYZE 2
+#define ID_BUTTON_FIBONACCI 1001
+#define ID_TIMER_FIBONACCI 2001
+bool g_autoFibonacciActive = false;
+
 #pragma comment(lib, "comdlg32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
@@ -80,19 +85,47 @@ public:
 
 private:
     void InitCrystals() {
-        // Alle fiktiven Kristalle entfernt. Nur noch echte Messdaten!
+        // --- DEIN BESTEHENDER BERGKRISTALL ---
         crystals.push_back({
             "Rock crystal", 
             "Ether", 
             "Clarity, Amplification & Maximum coupling", 
-            0x3C00, // Basis-Resonanz (ruhend)
-            {0x3CFF}, // Peak-Resonanz
+            0x3C00, 
+            {0x3CFF}, 
             {
                 "The crystal rests in its basic resonance. (0x3C00).",
                 "The field achieves maximum coupling (0x3CFF).",
                 "The frequency stabilizes within the CJK spectrum..",
-                "True clarity manifests itself as a measurable structure..",
                 "The electromagnetic field resonates in the ether.."
+            }
+        });
+        // --- NEU: TOTES WASSER (Leitungswasser / Druck) ---
+        crystals.push_back({
+            "Dead Water (Stagnant)", 
+            "Lead / Stagnation", 
+            "Rigidity, Pressure & Structural Chaos", 
+            0x5A5A, // Deine Untergrenze für totes Wasser
+            {0x64BB}, // Deine Obergrenze
+            {
+                "Water structure is rigid and disconnected (Stagnant Grid).",
+                "The flow memory is suppressed by pipe pressure.",
+                "Measuring high-frequency dissonance (0x5A5A - 0x64BB).",
+                "The element shows signs of energetic stagnation."
+            }
+        });
+        // --- NEU: LEBENDIGES WASSER (Strukturiert / Seide) ---
+        crystals.push_back({
+            "Living Water (Silk Matrix)", 
+            "Life / Vortex", 
+            "Coherence, Harmony & Self-Organization", 
+            0x79E1, // Der Startwert deines Baches
+            {0x7EF6}, // Der Peak deiner "Seiden-Matrix"
+            {
+                "The silk-thread matrix (U+7EF6) has stabilized.",
+                "Harmonic resonance from the forest source detected.",
+                "The water has regained its geometric memory.",
+                "Abundance completes the circle (0x79E1 - 0x7EF6).",
+                "The Silk Spiral is active and vibrant."
             }
         });
     }
@@ -235,12 +268,21 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     dictionary[0x5A5A] = {"Element", "Water (Flowing/Pressure)", "falling flood", "life force"};
     // --- Echo/Resonanz from Water ---
     dictionary[0xB4B4] = {"Element", "Water (Deep Echo)", "deep resonance", "river"};
+	dictionary[0x2618] = {"Nature", "Shamrock", "the ancient vitality of the earth"};
+    dictionary[0x2604] = {"Cosmic", "Comet", "a sudden spark of celestial energy"};
+    dictionary[0x263F] = {"Planetary", "Mercury", "the fluid communication of the spirit"};
+    dictionary[0x26AB] = {"Balance", "Deep Pool", "the silent wisdom of the deep water"};
+    dictionary[0x263C] = {"Light", "Sun", "life-giving warmth and solar power"};
 	
 }
 void InitSignatures() {
     // Original signatures
     signatures.push_back({{0x3CFF, 0x3C3F, 0x0F03, 0x0FFC, 0x0FCF, 0x30FF, 0xCFFF, 0xC03F, 0xC000, 0x3C30, 0x3CFF}, 
         "Crystal Insertion", "Crystal placed in electromagnetic field - resonance begins"});
+	signatures.push_back({{0x5A5A, 0x5B5B, 0x5C5C, 0x5A5A, 0x6000, 0x64BB, 0x6000, 0x5A5A, 0x5B5B, 0x5C5C, 0x5A5A}, 
+        "Stagnant Grid", "Dead water structure - rigid pipe resonance detected"});
+	signatures.push_back({{0x79E1, 0x7A20, 0x7B50, 0x7D80, 0x7EF6, 0x7F00, 0x7EF6, 0x7D80, 0x7B50, 0x7A20, 0x79E1}, 
+        "Silk Spiral", "Living water matrix - harmonic silk-thread resonance"});
     signatures.push_back({{0x0F03, 0x0FFC, 0x0FCF}, 
         "Tibetan Trinity", "Spiritual gateway opens"});
     signatures.push_back({{0xCFFF, 0xC03F, 0xC000}, 
@@ -479,48 +521,37 @@ private:
 
         // 4. Detail-Übersetzung (Original mit Erweiterungen)
         report << "=== DETAILED TRANSLATION (Original Timeline) ===\r\n";
-		// --- GHOST-HUNTER HIN ---
-        for (size_t k = 0; k < data.size(); k++) {
-            if (GetCategory(data[k]) == "Mystic") {
-                report << "\r\n[!!!] GHOST HUNTER HAS CAPTURED THE SYMBOL: U+" 
-                       << std::hex << std::uppercase << std::setw(4) << data[k] 
-                       << " at Position " << std::dec << k << " [!!!]\r\n\r\n";
-            }
-        }
-        int validGlyphsFound = 0;
         
-        std::vector<std::string> poemWords; 
+        uint16_t lastValue = 0;
+        int validGlyphsFound = 0;            // <--- WICHTIG: Definition wieder da!
+        std::vector<std::string> poemWords;  // <--- WICHTIG: Definition wieder da!
         
         for (size_t i = 0; i < data.size(); i++) {
             std::string cat = GetCategory(data[i]);
+            bool isMystic = (data[i] >= 0x2600 && data[i] <= 0x26FF);
             
-            // ORIGINAL: Nur aufschreiben, wenn es kein leeres Rauschen ist
-            if (!cat.empty()) { 
+            if (!cat.empty() && (data[i] != lastValue || isMystic)) { 
                 
-                // --- ERWEITERUNG 1: DIE MYSTIK-FALLE ---
-                if (data[i] >= 0x2600 && data[i] <= 0x26FF) {
-                    report << "\r\n[!!!] SECRET MYSTICAL SYMBOL FOUND: U+" 
+                if (isMystic) {
+                    report << "\r\n[!!!] MYSTISCHE RESONANZ: U+" 
                            << std::hex << std::uppercase << std::setw(4) << data[i] << " [!!!]\r\n";
                 }
 
-                // ORIGINAL: Zeile aufbauen (Position, Hex, Zeichen, Kategorie)
                 report << "[Position " << std::setw(6) << std::setfill('0') << std::dec << i << "] U+" 
                        << std::hex << std::uppercase << std::setw(4) << data[i]
-                       << " | " << static_cast<wchar_t>(data[i]) 
                        << " | [" << cat << "]";
                 
-                // --- ERWEITERUNG 2: WÖRTERBUCH-ÜBERSETZUNG ---
                 auto it = db.dictionary.find(data[i]);
                 if (it != db.dictionary.end()) {
-                    
-                    // Prüfen, ob das Wort schon in unserem Topf ist!
+                    // Check ob Wort schon im Topf ist
                     if (std::find(poemWords.begin(), poemWords.end(), it->second.mystical) == poemWords.end()) {
                         poemWords.push_back(it->second.mystical);
                     }
-                    
                     report << " ---> " << it->second.mystical; 
                 }
                 
+                report << "\r\n";
+                lastValue = data[i]; 
                 validGlyphsFound++;
             }
         }
@@ -547,7 +578,6 @@ private:
             } else {
                 report << "   until the echo completes the circle.\r\n\r\n";
             }
-            
             if (n >= 1) {
                 report << "   Do not search in the light, but in the " << poemWords[0] << ",\r\n";
                 report << "   because there awaits the " << poemWords[1 % n] << ".\r\n\r\n";
@@ -556,32 +586,26 @@ private:
             report << "   The field was too quiet. The echoes weren't strong enough,\r\n";
             report << "   to form a clear song from the ether.\r\n\r\n";
         }
-        
         if (validGlyphsFound == 0) {
             report << "No known categories or dictionary entries found (only background noise).\r\n";
         }
         return report.str();
     }
-
     const CrystalProfile* IdentifyCrystal(const std::vector<uint16_t>& data) {
         int bergkristallScore = 0;
-        
         for (uint16_t glyph : data) {
             // Echte Signatur prüfen: Bereich 0x3C00 bis 0x3CFF
             if (glyph >= 0x3C00 && glyph <= 0x3CFF) {
                 bergkristallScore++;
             }
         }
-        
         // Wenn Signale in diesem Frequenzband gefunden wurden, ist es der Bergkristall
         if (bergkristallScore > 0 && !db.crystals.empty()) {
             return &db.crystals[0]; // Bergkristall
         }
-        
         // Wenn nichts im Bereich 0x3C00-0x3CFF liegt, kennen wir den Kristall (noch) nicht
         return nullptr; 
     }
-
     std::vector<std::pair<size_t, const Signature*>> FindSignatures(const std::vector<uint16_t>& data) {
         std::vector<std::pair<size_t, const Signature*>> results;
         for (const auto& sig : db.signatures) {
@@ -594,27 +618,22 @@ private:
                         break;
                     }
                 }
-                // Lösung für den C++ Push-Back Fehler: std::make_pair nutzen
                 if (match) results.push_back(std::make_pair(i, &sig));
             }
         }
         return results;
     }
 };
-
 // --- GLOBALE VARIABLEN ---
 HWND hEdit, hStatus, hBtnAnalyze, hBtnBrowse, hBtnMandala;
 char g_filename[260] = {0};
 HFONT hFont;
 EtherAnalyzer analyzer;
-
 // Grafik-Variablen
 HBITMAP g_hbgImage = NULL;
 HBRUSH g_hbrEditBkgnd = NULL;
 HICON g_hIcon = NULL;
-
 // --- HILFSFUNKTION FÜR UNICODE ---
-// Zwingt Windows, Emojis und Umlaute aus unserem C++ Code korrekt anzuzeigen!
 std::wstring UTF8ToWide(const std::string& utf8Str) {
     if (utf8Str.empty()) return L"";
     int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, &utf8Str[0], (int)utf8Str.size(), NULL, 0);
@@ -622,7 +641,6 @@ std::wstring UTF8ToWide(const std::string& utf8Str) {
     MultiByteToWideChar(CP_UTF8, 0, &utf8Str[0], (int)utf8Str.size(), &wideStr[0], sizeNeeded);
     return wideStr;
 }
-
 // --- FUNKTIONEN ---
 void BrowseFile(HWND hwnd) {
     OPENFILENAMEA ofn = {0};
@@ -631,119 +649,109 @@ void BrowseFile(HWND hwnd) {
     ofn.nMaxFile = sizeof(g_filename);
     ofn.lpstrFilter = "Raw/Text Files\0*.raw;*.txt\0All Files\0*.*\0";
     ofn.Flags = OFN_FILEMUSTEXIST;
-    
     if (GetOpenFileNameA(&ofn)) {
         SetWindowTextA(hStatus, g_filename);
     }
 }
-
 void AnalyzeFile() {
     if (strlen(g_filename) == 0) {
         SetWindowTextW(hStatus, UTF8ToWide("Please select a file first!").c_str());
         return;
     }
-    
     SetWindowTextW(hStatus, UTF8ToWide("Analyzing ether currents... Please wait.").c_str());
-    
     // Analyse durchführen
     std::string result = analyzer.AnalyzeFullFile(g_filename);
-    
-    // Text sicher in das Fenster packen (mit sauberen Emojis und Rahmen)
     std::wstring wResult = UTF8ToWide(result);
     SetWindowTextW(hEdit, wResult.c_str());
-    
-    // Speichern (als normale Textdatei)
     std::string outFile = std::string(g_filename) + "_oracle_translation.txt";
     std::ofstream out(outFile);
     out << result;
     out.close();
-    
     std::string statusMsg = "Done. Saved as: " + outFile;
     SetWindowTextA(hStatus, statusMsg.c_str());
 }
-
+void PlayFibonacciResonance() {
+    int a = 1;
+    int b = 1;
+    int next;
+    int baseFreq = 528; //528 Hz
+    int duration = 150; //150 Millisekunden
+    int multiplier = 100; //Pausen in Millisekunden
+    //ersten 10 Fibonacci-Stufen
+    for(int i = 0; i < 10; i++) {
+        Beep(baseFreq, duration);
+        Sleep(a * multiplier);
+        // 3. Berechne die nächste Fibonacci-Zahl (1, 1, 2, 3, 5, 8...)
+        next = a + b;
+        a = b;
+        b = next;
+    }
+}
 // --- WINDOW PROCEDURE ---
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
         case WM_CREATE: {
-            // 1. Icon Laden
+            // 1. Icon Laden & Erstes Button
+            CreateWindow("BUTTON", "Fibonacci Rythm", 
+                         WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, 
+                         10, 100, 150, 30, // x, y, Breite, Höhe
+                         hwnd, (HMENU)ID_BUTTON_FIBONACCI, NULL, NULL);
             g_hIcon = (HICON)LoadImageA(NULL, "icon.ico", IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
             if (g_hIcon) {
                 SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)g_hIcon);
                 SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)g_hIcon);
             }
-            
-            // 2. Hintergrundbild laden
             g_hbgImage = LoadBitmap(GetModuleHandle(NULL), MAKEINTRESOURCE(IDB_MYBG));
-            
-            // 3. Pinsel für Textfeld
+            //2. Pinsel für Textfeld
             g_hbrEditBkgnd = CreateSolidBrush(RGB(15, 15, 20));
-
             hFont = CreateFontW(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                 CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Consolas");
-            
             // UI-Elemente mit absolut sicheren Hex-Codes für Umlaute (Ö = \x00D6, ä = \x00E4)
             hBtnBrowse = CreateWindowExW(0, L"BUTTON", L"OPEN \x00D6" L"FILE...",
                 WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
                 20, 20, 150, 35, hwnd, (HMENU)1, NULL, NULL);
             SendMessage(hBtnBrowse, WM_SETFONT, (WPARAM)hFont, TRUE);
-            
             hBtnAnalyze = CreateWindowExW(0, L"BUTTON", L"consult an oracle",
                 WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
                 180, 20, 150, 35, hwnd, (HMENU)2, NULL, NULL);
             SendMessage(hBtnAnalyze, WM_SETFONT, (WPARAM)hFont, TRUE);
-			
-			hBtnMandala = CreateWindowExW(0, L"BUTTON", L"DRAW MANDALA",
+            hBtnMandala = CreateWindowExW(0, L"BUTTON", L"DRAW MANDALA",
                 WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
                 340, 20, 150, 35, hwnd, (HMENU)3, NULL, NULL);
             SendMessage(hBtnMandala, WM_SETFONT, (WPARAM)hFont, TRUE);
-            
             hStatus = CreateWindowExW(0, L"STATIC", L"Ready. Please attach a file. w\x00E4" L"hlen.",
                 WS_VISIBLE | WS_CHILD | SS_LEFT,
                 20, 65, 740, 20, hwnd, NULL, NULL, NULL);
             SendMessage(hStatus, WM_SETFONT, (WPARAM)hFont, TRUE);
-            
             hEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
                 WS_VISIBLE | WS_CHILD | WS_VSCROLL | WS_HSCROLL |
                 ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
                 20, 200, 740, 390, hwnd, NULL, NULL, NULL);
             SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
-            
             return 0;
         }
-
         case WM_ERASEBKGND: {
             if (g_hbgImage) {
                 HDC hdc = (HDC)wParam;
                 HDC hdcMem = CreateCompatibleDC(hdc);
                 HBITMAP hbmOld = (HBITMAP)SelectObject(hdcMem, g_hbgImage);
-                
                 BITMAP bm;
                 GetObject(g_hbgImage, sizeof(bm), &bm);
-                
                 RECT rc;
                 GetClientRect(hwnd, &rc);
-                
-                // --- HIER IST DIE MAGIE FÜR DIE BILDQUALITÄT ---
-                // Sagt Windows, dass es weiche, hochwertige Kanten beim Skalieren berechnen soll
                 SetStretchBltMode(hdc, HALFTONE);
                 SetBrushOrgEx(hdc, 0, 0, NULL);
-                // ------------------------------------------------
-                
                 StretchBlt(hdc, 0, 0, rc.right, rc.bottom, hdcMem, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
-                
                 SelectObject(hdcMem, hbmOld);
                 DeleteDC(hdcMem);
                 return 1; 
             }
             return DefWindowProcW(hwnd, msg, wParam, lParam);
         }
-
         case WM_CTLCOLORSTATIC: {
             HDC hdcStatic = (HDC)wParam;
-            HWND hwndCtrl = (HWND)lParam; // Welches Element fragt gerade nach Farbe?
-
+            HWND hwndCtrl = (HWND)lParam; 
             // 1. Ist es unser großes Orakel-Textfeld?
             if (hwndCtrl == hEdit) {
                 SetTextColor(hdcStatic, RGB(0, 220, 255)); // Mystisches Cyan
@@ -751,33 +759,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 SetBkMode(hdcStatic, OPAQUE);              // OPAQUE beendet den Geister-Schmier-Effekt!
                 return (LRESULT)g_hbrEditBkgnd;
             } 
-            // 2. Ist es der "Bereit..." Status-Text oben?
             else {
                 SetTextColor(hdcStatic, RGB(255, 215, 0)); // Gold / Gelb
                 SetBkMode(hdcStatic, TRANSPARENT);         // Der darf transparent über dem Tempel schweben
                 return (LRESULT)GetStockObject(NULL_BRUSH);
             }
         }
-
-        // --- Das große Textfeld (MUSS massiv sein, sonst schmiert es!) ---
         case WM_CTLCOLOREDIT: {
             HDC hdcEdit = (HDC)wParam;
-            
-            // Textfarbe: Ein leuchtendes Cyan/Hellblau
             SetTextColor(hdcEdit, RGB(0, 220, 255)); 
-            
-            // Hintergrundfarbe: Muss exakt unserem Pinsel entsprechen!
             SetBkColor(hdcEdit, RGB(15, 15, 20)); 
-            
-            // GANZ WICHTIG: OPAQUE zwingt Windows, den Hintergrund jedes Mal 
-            // neu zu streichen. Das beendet das Schmieren der Schrift!
-            SetBkMode(hdcEdit, OPAQUE); 
-            
-            // GANZ WICHTIG 2: Hier muss g_hbrEditBkgnd stehen, nicht NULL_BRUSH!
+            SetBkMode(hdcEdit, OPAQUE);
             return (LRESULT)g_hbrEditBkgnd;
         }
-        
-        case WM_COMMAND:
+        case WM_COMMAND: {
             if (LOWORD(wParam) == 1) BrowseFile(hwnd);
             if (LOWORD(wParam) == 2) AnalyzeFile();
             if (LOWORD(wParam) == 3) {
@@ -802,40 +797,67 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                 }
             }
-            return 0;
+            if (LOWORD(wParam) == ID_BUTTON_FIBONACCI) {
+				if (!g_autoFibonacciActive) {
+					// AKTIVIEREN
+					g_autoFibonacciActive = true;
+					// Timer starten: Alle 60000 Millisekunden (60 Sekunden)
+					SetTimer(hwnd, ID_TIMER_FIBONACCI, 60000, NULL);
             
-        case WM_DESTROY:
+					// Text auf dem Button ändern, damit man sieht, dass es läuft
+					SetWindowText((HWND)lParam, "Auto-Fib: ON");
+            
+					// Einmal sofort abspielen, damit man nicht 60 Sek warten muss
+					SendMessage(hwnd, WM_TIMER, ID_TIMER_FIBONACCI, 0);
+				} else {
+					// DEAKTIVIEREN
+					g_autoFibonacciActive = false;
+					KillTimer(hwnd, ID_TIMER_FIBONACCI);
+					SetWindowText((HWND)lParam, "Fibonacci Rythm");
+					MessageBox(hwnd, "Automatic stopped.", "Aether Oracle", MB_OK);
+				}
+			}
+			break;
+        }
+		case WM_TIMER:
+			if (wParam == ID_TIMER_FIBONACCI) {
+				// --- Hier ist dein Fibonacci-Rhythmus ---
+				int a = 1, b = 1, next;
+				int baseFreq = 528;
+        
+				for(int i = 0; i < 12; i++) {
+					Beep(baseFreq, 200); 
+					Sleep(a * 50);
+					next = a + b;
+					a = b;
+					b = next;
+					if(a > 100) { a = 1; b = 1; } 
+				}
+			}
+			break;
+        case WM_DESTROY: {
             DeleteObject(hFont);
             if (g_hbgImage) DeleteObject(g_hbgImage);
             if (g_hbrEditBkgnd) DeleteObject(g_hbrEditBkgnd);
             if (g_hIcon) DestroyIcon(g_hIcon);
             PostQuitMessage(0);
             return 0;
+        }
     }
-    return DefWindowProcW(hwnd, msg, wParam, lParam);
+    return DefWindowProc(hwnd, msg, wParam, lParam);
 }
-
 // --- ENTRY POINT ---
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
-    
-    // 1. Icon direkt aus der .exe laden (ID 100)
     HICON hIconBig   = (HICON)LoadImage(hInst, MAKEINTRESOURCE(IDI_MYICON), IMAGE_ICON, 64, 64, 0);
     HICON hIconSmall = (HICON)LoadImage(hInst, MAKEINTRESOURCE(IDI_MYICON), IMAGE_ICON, 16, 16, 0);
-    
-    // 2. Fenster-Klasse (Die "DNA" des Fensters)
     WNDCLASSEXW wc = {sizeof(WNDCLASSEXW)};
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInst;
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.lpszClassName = L"EtherOracleClass";
-    
-    // 3. Die skalierten Icons festlegen
-    wc.hIcon   = hIconBig;       // Großes Icon (Taskbar/Alt-Tab)
-    wc.hIconSm = hIconSmall;     // Kleines Icon (Oben links in der Titelleiste)
-    
+    wc.hIcon   = hIconBig;
+    wc.hIconSm = hIconSmall;
     RegisterClassExW(&wc);
-    
-    // ... Rest bleibt gleich ...
     HWND hwnd = CreateWindowExW(0, L"EtherOracleClass", L"\x00C4" L"ther-Oracle - Master Decoder \xD83D\xDD2E",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
         CW_USEDEFAULT, CW_USEDEFAULT, 1280, 720,
@@ -844,7 +866,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
     Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
-    
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
         TranslateMessage(&msg);
