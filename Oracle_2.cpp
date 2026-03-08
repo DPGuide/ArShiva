@@ -273,10 +273,8 @@ void InitSignatures() {
     signatures.push_back({{0x2625, 0x267E}, 
         "Immortality Sequence", "Ankh and Infinity. Eternal recurrence activated."});
 }
-}; // <-- DIESE KLAMMER HATTE GEFEHLT!
-
+};
 // --- ANALYSE LOGIK ---
-
 class EtherAnalyzer {
     OracleDatabase db;
     std::mt19937 rng;
@@ -524,8 +522,6 @@ private:
                 validGlyphsFound++;
             }
             
-            // ORIGINAL: Deine alte 1000er Grenze. 
-            // WICHTIGER TIPP: Wenn deine 25-Sekunden-Marke erst NACH 1000 Zeichen kommt, 
             // ändere die 1000 hier einfach in 50000! Dann siehst du viel mehr von deiner Timeline!
             if (validGlyphsFound >= 50000) break;
         }
