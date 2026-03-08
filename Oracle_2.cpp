@@ -213,6 +213,7 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     dictionary[0x2626] = {"Mystic", "Chi Rho", "Christ Force", "Anointed"};
     dictionary[0x2627] = {"Mystic", "Cross", "Sacrifice", "Redemption"};
     dictionary[0x2628] = {"Mystic", "Cross Orthodox", "Resurrection", "Victory"};
+    dictionary[0x2660] = {"Mystic", "Spades (Swords)", "sharp clarity that cuts through the flood"};	
     // --- I Ching ---
     dictionary[0x4DC0] = {"I-Ching", "The Creative", "Primal Force", "Heaven"};
     dictionary[0x4DC1] = {"I-Ching", "The Receptive", "Devotion", "Earth"};
@@ -230,6 +231,11 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     dictionary[0x25CB] = {"Geometry", "Circle", "Wholeness", "Spirit"};
     dictionary[0x2B21] = {"Geometry", "Hexagon", "Structure", "Carbon"};
     dictionary[0x2B1F] = {"Geometry", "Pentagon", "Humanity", "Microcosm"};
+	// --- Element Water ---
+    dictionary[0x5A5A] = {"Element", "Water (Flowing/Pressure)", "falling flood", "life force"};
+    // --- Echo/Resonanz from Water ---
+    dictionary[0xB4B4] = {"Element", "Water (Deep Echo)", "deep resonance", "river"};
+	
 }
 void InitSignatures() {
     // Original signatures
@@ -473,31 +479,55 @@ private:
             }
         }
 
-        // 4. Detail-Übersetzung (Gefiltert, komplett ohne Rauschen)
-        report << "=== DETAILED TRANSLATION (Only significant resonances) ===\r\n";
+        // 4. Detail-Übersetzung (Original mit Erweiterungen)
+        report << "=== DETAILED TRANSLATION (Original Timeline) ===\r\n";
+		// --- GHOST-HUNTER HIN ---
+        for (size_t k = 0; k < data.size(); k++) {
+            if (GetCategory(data[k]) == "Mystic") {
+                report << "\r\n[!!!] GHOST HUNTER HAS CAPTURED THE SYMBOL: U+" 
+                       << std::hex << std::uppercase << std::setw(4) << data[k] 
+                       << " at Position " << std::dec << k << " [!!!]\r\n\r\n";
+            }
+        }
         int validGlyphsFound = 0;
         
-        // --- NEU: Hier sammeln wir die Wörter für das Gedicht ---
         std::vector<std::string> poemWords; 
         
         for (size_t i = 0; i < data.size(); i++) {
             std::string cat = GetCategory(data[i]);
             
+            // ORIGINAL: Nur aufschreiben, wenn es kein leeres Rauschen ist
             if (!cat.empty()) { 
-                report << "[Position " << std::setw(6) << std::setfill('0') << i << "] U+" 
+                
+                // --- ERWEITERUNG 1: DIE MYSTIK-FALLE ---
+                if (data[i] >= 0x2600 && data[i] <= 0x26FF) {
+                    report << "\r\n[!!!] SECRET MYSTICAL SYMBOL FOUND: U+" 
+                           << std::hex << std::uppercase << std::setw(4) << data[i] << " [!!!]\r\n";
+                }
+
+                // ORIGINAL: Zeile aufbauen (Position, Hex, Zeichen, Kategorie)
+                report << "[Position " << std::setw(6) << std::setfill('0') << std::dec << i << "] U+" 
                        << std::hex << std::uppercase << std::setw(4) << data[i]
                        << " | " << static_cast<wchar_t>(data[i]) 
                        << " | [" << cat << "]";
                 
+                // --- ERWEITERUNG 2: WÖRTERBUCH-ÜBERSETZUNG ---
                 auto it = db.dictionary.find(data[i]);
                 if (it != db.dictionary.end()) {
-                    // Wir werfen die mystische Bedeutung in unseren Gedichts-Topf!
-                    poemWords.push_back(it->second.mystical); 
+                    poemWords.push_back(it->second.mystical);
+                    // Hängt die Übersetzung einfach mit einem Pfeil hinten an die Zeile an!
+                    report << " ---> " << it->second.mystical; 
                 }
+                
+                report << "\r\n"; // Der originale Zeilenumbruch
                 
                 validGlyphsFound++;
             }
-            if (validGlyphsFound >= 1000) break;
+            
+            // ORIGINAL: Deine alte 1000er Grenze. 
+            // WICHTIGER TIPP: Wenn deine 25-Sekunden-Marke erst NACH 1000 Zeichen kommt, 
+            // ändere die 1000 hier einfach in 50000! Dann siehst du viel mehr von deiner Timeline!
+            if (validGlyphsFound >= 50000) break;
         }
 		// --- 5. DAS MYSTISCHE GEDICHT (Aus den gefundenen Wörtern generiert) ---
         report << "\r\n╔══════════════════════════════════════════════════╗\r\n";
