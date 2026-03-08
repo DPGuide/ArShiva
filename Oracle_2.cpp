@@ -521,34 +521,39 @@ private:
                     report << " ---> " << it->second.mystical; 
                 }
                 
-                report << "\r\n";
                 validGlyphsFound++;
             }
-            // Wir lassen ihn die ganze Datei lesen, damit er das Pik am Ende sicher mitnimmt
-            if (i >= data.size() - 1) break; 
         }
-		// --- 5. DAS MYSTISCHE GEDICHT (Aus den gefundenen Wörtern generiert) ---
+		// --- 5. DAS MYSTISCHE GEDICHT (Flexibel und unzerstörbar) ---
         report << "\r\n╔══════════════════════════════════════════════════╗\r\n";
-        report << "║              THE SONG OF THE Aether              ║\r\n";
+        report << "║               THE SONG OF THE Aether             ║\r\n";
         report << "╚══════════════════════════════════════════════════╝\r\n";
         
-        if (poemWords.size() >= 4) {
-            // Wir mischen die gefundenen Wörter gut durch
+        if (!poemWords.empty()) {
+            // Wir mischen die gefundenen Wörter
             std::shuffle(poemWords.begin(), poemWords.end(), rng);
             
-            // Jetzt bauen wir Sätze aus den Dateiinhalten!
-            report << "   Hidden in the noise, the " << poemWords[0] << ",\r\n";
-            report << "   led by " << poemWords[1] << " through time and space.\r\n";
-            report << "   The field whispers of " << poemWords[2] << ",\r\n";
-            report << "   until " << poemWords[3] << " completes the circle.\r\n\r\n";
+            // Wir nutzen den Modulo-Trick (%), damit das Programm nie abstürzt, 
+            // egal wie viele Wörter wir gefunden haben!
+            size_t n = poemWords.size();
             
-            // Falls wir noch mehr Wörter haben, hängen wir eine zweite Strophe an:
-            if (poemWords.size() >= 6) {
-                report << "   Do not search in the light, but in the " << poemWords[4] << ",\r\n";
-                report << "   because there awaits the " << poemWords[5] << ".\r\n\r\n";
+            report << "   Hidden in the noise, the " << poemWords[0] << ",\r\n";
+            report << "   led by " << poemWords[1 % n] << " through time and space.\r\n";
+            report << "   The field whispers of " << poemWords[2 % n] << ",\r\n";
+            
+            // Wenn wir unser seltenes drittes Wort haben, kriegt es einen Ehrenplatz:
+            if (n >= 3) {
+                report << "   until " << poemWords[n-1] << " completes the circle.\r\n\r\n";
+            } else {
+                report << "   until the echo completes the circle.\r\n\r\n";
+            }
+            
+            if (n >= 1) {
+                report << "   Do not search in the light, but in the " << poemWords[0] << ",\r\n";
+                report << "   because there awaits the " << poemWords[1 % n] << ".\r\n\r\n";
             }
         } else {
-            report << "   The field was too quiet. The echoes weren't strong enough.,\r\n";
+            report << "   The field was too quiet. The echoes weren't strong enough,\r\n";
             report << "   to form a clear song from the ether.\r\n\r\n";
         }
         
