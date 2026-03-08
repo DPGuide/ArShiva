@@ -1,0 +1,4 @@
+#include "resource.h"
+
+IDI_MYICON ICON   "icon.ico"
+IDB_MYBG   BITMAP "orakel.bmp"
