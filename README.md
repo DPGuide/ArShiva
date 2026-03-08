@@ -32,7 +32,8 @@ Alternatively, purchase a USB-C adapter and use your phone as a recording device
 
 <img width="356" height="452" alt="image" src="https://github.com/user-attachments/assets/9c94605b-332c-4f47-9131-fd5091399021" />
 
-***this is for smartphone setup please go in to airplane mode , start youre dictation machine APP and safe best way as *.m4a files !***
+***this is for smartphone setup please go into airplane mode plug in the USB-C etc... ,
+start youre dictation machine APP and safe best way as *.m4a files !***
 <img width="641" height="697" alt="image" src="https://github.com/user-attachments/assets/c394da90-6529-4a0c-a80d-67f4a30e5e08" />
 
 <img width="321" height="508" alt="image" src="https://github.com/user-attachments/assets/d0592ede-ed5e-4a3e-9b55-7426acde7494" />
