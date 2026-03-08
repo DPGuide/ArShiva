@@ -512,18 +512,20 @@ private:
                 // --- ERWEITERUNG 2: WÖRTERBUCH-ÜBERSETZUNG ---
                 auto it = db.dictionary.find(data[i]);
                 if (it != db.dictionary.end()) {
-                    poemWords.push_back(it->second.mystical);
-                    // Hängt die Übersetzung einfach mit einem Pfeil hinten an die Zeile an!
+                    
+                    // Prüfen, ob das Wort schon in unserem Topf ist!
+                    if (std::find(poemWords.begin(), poemWords.end(), it->second.mystical) == poemWords.end()) {
+                        poemWords.push_back(it->second.mystical);
+                    }
+                    
                     report << " ---> " << it->second.mystical; 
                 }
                 
-                report << "\r\n"; // Der originale Zeilenumbruch
-                
+                report << "\r\n";
                 validGlyphsFound++;
             }
-            
-            // ändere die 1000 hier einfach in 50000! Dann siehst du viel mehr von deiner Timeline!
-            if (validGlyphsFound >= 50000) break;
+            // Wir lassen ihn die ganze Datei lesen, damit er das Pik am Ende sicher mitnimmt
+            if (i >= data.size() - 1) break; 
         }
 		// --- 5. DAS MYSTISCHE GEDICHT (Aus den gefundenen Wörtern generiert) ---
         report << "\r\n╔══════════════════════════════════════════════════╗\r\n";
