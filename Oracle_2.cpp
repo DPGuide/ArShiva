@@ -16,6 +16,7 @@
 #include <windows.h>
 #include "resource.h"
 #include <algorithm>
+#include <thread>
 
 #define ID_BUTTON_ANALYZE 2
 #define ID_BUTTON_FIBONACCI 1001
@@ -66,81 +67,83 @@ double CalculateFrequencyMagnitude(const std::vector<double>& data, size_t start
 
     return std::sqrt(q1 * q1 + q2 * q2 - q1 * q2 * coeff);
 }
-// --- AETHER AUDIO RADAR (192kHz) ---
+// --- AETHER AUDIO RADAR ---
 std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
-    std::string report = "\r\n--- AETHER DECODER (192kHz) ---\r\n";
+    std::string report = "\r\n--- AETHER DECODER (Universal Contrast Mode) ---\r\n";
     double sample_rate = 48000.0;
-    size_t window_size = (size_t)(sample_rate * 0.2); // 38400 Samples
+    size_t read_window = (size_t)(sample_rate * 0.08); 
+    size_t bit_step = (size_t)(sample_rate * 0.2);
+    size_t start_searching_at = (size_t)(sample_rate * 2.0); // 2 Sek Sicherheit
 
-    // Diagnose: Wie viel kommt im Orakel an?
-    report += "Raw data size: " + std::to_string(raw_data.size()) + " Values\r\n";
+    if (raw_data.size() < (sample_rate * 5)) return report + "ERROR: Aufnahme zu kurz.\r\n";
 
-    if (raw_data.size() < 1000) {
-        return report + "ERROR: File is almost empty! Check recording.\r\n";
-    }
-
+    // 1. Audio zentrieren (DC-Fix)
     std::vector<double> mono_audio;
-    // Wir mischen Links und Rechts zu einem starken Mono-Signal
+    double mean = 0;
     for (size_t i = 0; i + 1 < raw_data.size(); i += 2) {
-        int16_t left = (int16_t)raw_data[i];
-        int16_t right = (int16_t)raw_data[i+1];
-        
-        // Durchschnitt bilden, um Übersteuerungen zu vermeiden
-        double mixed = (static_cast<double>(left) + static_cast<double>(right)) / 2.0;
-        mono_audio.push_back(mixed);
+        double val = (static_cast<double>((int16_t)raw_data[i]) + static_cast<double>((int16_t)raw_data[i+1])) / 2.0;
+        mono_audio.push_back(val);
+        mean += val;
     }
+    mean /= mono_audio.size();
+    for (auto& s : mono_audio) s -= mean;
 
-    report += "Mono-Samples: " + std::to_string(mono_audio.size()) + "\r\n";
+    // 2. UNIVERSALER SYNC (Kontrast-Maximierung)
+    size_t best_offset = 0;
+    double max_contrast = 0;
 
-    // --- SCHRITT 1: DER FLEXIBLE SYNC ---
-    size_t start_offset = 0;      // <--- HIER SIND DIE FEHLENDEN ZEILEN
-    bool found_start = false;     // <--- HIER SIND DIE FEHLENDEN ZEILEN
-    size_t start_searching_at = (size_t)(sample_rate * 0.5); 
-    double sync_threshold = 950000.0; // Wir setzen die Messlatte hoch!
+    report += "Scanning for Signal Contrast...\r\n";
 
-    for (size_t i = start_searching_at; i < mono_audio.size() - window_size; i += (size_t)(sample_rate * 0.005)) {
-        double m0 = CalculateFrequencyMagnitude(mono_audio, i, window_size, 432.0, sample_rate);
-        double m1 = CalculateFrequencyMagnitude(mono_audio, i, window_size, 528.0, sample_rate);
-        
-        if (m0 > sync_threshold || m1 > sync_threshold) {
-            start_offset = i;
-            found_start = true;
-            break; 
+    // Wir suchen den Punkt, an dem die Unterscheidung zwischen 0 und 1 am klarsten ist
+    for (size_t i = start_searching_at; i < mono_audio.size() - (bit_step * 10); i += (size_t)(sample_rate * 0.01)) {
+        double current_contrast = 0;
+        // Wir testen die nächsten 5 Bits auf ihre "Eindeutigkeit"
+        for (int b = 0; b < 5; b++) {
+            size_t p = i + (b * bit_step) + (size_t)(bit_step * 0.5);
+            double m0 = CalculateFrequencyMagnitude(mono_audio, p, read_window, 432.0, sample_rate);
+            double m1 = CalculateFrequencyMagnitude(mono_audio, p, read_window, 528.0, sample_rate);
+            current_contrast += std::abs(m1 - m0); // Je größer die Differenz, desto besser das Signal
+        }
+
+        if (current_contrast > max_contrast) {
+            max_contrast = current_contrast;
+            best_offset = i;
         }
     }
 
-    if (!found_start) {
-        return report + "STATUS: Silence. No signal above 700k found.\r\n";
-    }
+    report += ">>> SIGNAL LOCK: " + std::to_string(best_offset) + " Samples\r\n";
 
-    report += ">>> SYNC LOCK: " + std::to_string(start_offset) + " Samples\r\n";
-
-    // --- SCHRITT 2: DECODIEREN ---
-    std::string decoded_text = "";
-    int bit_count = 0;
+    // 3. DECODIEREN (Ohne Hardcoding)
+    std::string final_text = "";
     unsigned char current_char = 0;
+    int bit_count = 0;
     std::string bit_stream = "";
 
-    for (size_t i = start_offset; i <= mono_audio.size() - window_size; i += window_size) {
-        double m0 = CalculateFrequencyMagnitude(mono_audio, i, window_size, 432.0, sample_rate);
-        double m1 = CalculateFrequencyMagnitude(mono_audio, i, window_size, 528.0, sample_rate);
+    for (size_t p = best_offset; p + bit_step < mono_audio.size(); p += bit_step) {
+        // Peak-Voting für jedes Bit (3 Messpunkte für Stabilität)
+        int votes_for_1 = 0;
+        for (double r : {0.4, 0.5, 0.6}) {
+            size_t sample_p = p + (size_t)(bit_step * r);
+            double m0 = CalculateFrequencyMagnitude(mono_audio, sample_p, read_window, 432.0, sample_rate);
+            double m1 = CalculateFrequencyMagnitude(mono_audio, sample_p, read_window, 528.0, sample_rate);
+            if (m1 > m0) votes_for_1++;
+        }
 
-        int bit = (m1 > m0) ? 1 : 0;
-        if (bit_stream.length() < 60) bit_stream += std::to_string(bit) + " ";
+        int bit = (votes_for_1 >= 2) ? 1 : 0;
+        bit_stream += std::to_string(bit);
         
         current_char = (current_char << 1) | bit;
         bit_count++;
 
         if (bit_count == 8) {
-            if (current_char >= 32 && current_char <= 126) decoded_text += (char)current_char;
-            else decoded_text += "?"; 
+            final_text += (current_char >= 32 && current_char <= 126) ? (char)current_char : '.';
             bit_count = 0;
             current_char = 0;
         }
     }
 
     report += "Bits: " + bit_stream + "\r\n";
-    report += "--- RESULT ---\r\nTEXT: [" + decoded_text + "]\r\n";
+    report += "RESULT: [" + final_text + "]\r\n";
     return report;
 }
 // --- DATENSTRUKTUREN ---
@@ -973,16 +976,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_CTLCOLORSTATIC: {
             HDC hdcStatic = (HDC)wParam;
             HWND hwndCtrl = (HWND)lParam; 
-            // 1. Ist es unser großes Orakel-Textfeld?
             if (hwndCtrl == hEdit) {
-                SetTextColor(hdcStatic, RGB(0, 220, 255)); // Mystisches Cyan
-                SetBkColor(hdcStatic, RGB(15, 15, 20));    // Muss exakt wie g_hbrEditBkgnd sein!
-                SetBkMode(hdcStatic, OPAQUE);              // OPAQUE beendet den Geister-Schmier-Effekt!
+                SetTextColor(hdcStatic, RGB(0, 220, 255));
+                SetBkColor(hdcStatic, RGB(15, 15, 20));
+                SetBkMode(hdcStatic, OPAQUE);
                 return (LRESULT)g_hbrEditBkgnd;
             } 
             else {
-                SetTextColor(hdcStatic, RGB(255, 215, 0)); // Gold / Gelb
-                SetBkMode(hdcStatic, TRANSPARENT);         // Der darf transparent über dem Tempel schweben
+                SetTextColor(hdcStatic, RGB(255, 215, 0));
+                SetBkMode(hdcStatic, TRANSPARENT);
                 return (LRESULT)GetStockObject(NULL_BRUSH);
             }
         }
@@ -1019,44 +1021,44 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 }
             }
             if (LOWORD(wParam) == ID_BUTTON_FIBONACCI) {
-				if (!g_autoFibonacciActive) {
-					// AKTIVIEREN
-					TransmitMessageToWater("AETHER");
-					g_autoFibonacciActive = true;
-					// Timer starten: Alle 60000 Millisekunden (60 Sekunden)
-					SetTimer(hwnd, ID_TIMER_FIBONACCI, 60000, NULL);
-            
-					// Text auf dem Button ändern, damit man sieht, dass es läuft
-					SetWindowText((HWND)lParam, "Auto-Fib: ON");
-            
-					// Einmal sofort abspielen, damit man nicht 60 Sek warten muss
-					SendMessage(hwnd, WM_TIMER, ID_TIMER_FIBONACCI, 0);
-				} else {
-					// DEAKTIVIEREN
-					g_autoFibonacciActive = false;
-					KillTimer(hwnd, ID_TIMER_FIBONACCI);
-					SetWindowText((HWND)lParam, "Fibonacci Rythm");
-					MessageBox(hwnd, "Automatic stopped.", "Aether Oracle", MB_OK);
-				}
-			}
-			break;
+        if (!g_autoFibonacciActive) {
+            g_autoFibonacciActive = true;
+            SetWindowText((HWND)lParam, "Auto-Fib: ON");
+            SetTimer(hwnd, ID_TIMER_FIBONACCI, 60000, NULL);
+            std::thread([]() {
+                TransmitMessageToWater("AETHER");
+                int a = 1, b = 1, next;
+                for(int i = 0; i < 12 && g_autoFibonacciActive; i++) {
+                    Beep(528, 200); 
+                    Sleep(a * 50);
+                    next = a + b; a = b; b = next;
+                    if(a > 100) { a = 1; b = 1; } 
+                }
+            }).detach();
+
+        } else {
+            g_autoFibonacciActive = false;
+            KillTimer(hwnd, ID_TIMER_FIBONACCI);
+            SetWindowText((HWND)lParam, "Fibonacci Rythm");
+            MessageBox(hwnd, "Automatic stopped.", "Aether Oracle", MB_OK);
         }
-		case WM_TIMER:
-			if (wParam == ID_TIMER_FIBONACCI) {
-				// --- Hier ist dein Fibonacci-Rhythmus ---
-				int a = 1, b = 1, next;
-				int baseFreq = 528;
-        
-				for(int i = 0; i < 12; i++) {
-					Beep(baseFreq, 200); 
-					Sleep(a * 50);
-					next = a + b;
-					a = b;
-					b = next;
-					if(a > 100) { a = 1; b = 1; } 
-				}
-			}
-			break;
+    }
+    break;
+}
+
+case WM_TIMER:
+    if (wParam == ID_TIMER_FIBONACCI && g_autoFibonacciActive) {
+        std::thread([]() {
+            int a = 1, b = 1, next;
+            for(int i = 0; i < 12 && g_autoFibonacciActive; i++) {
+                Beep(528, 200); 
+                Sleep(a * 50);
+                next = a + b; a = b; b = next;
+                if(a > 100) { a = 1; b = 1; } 
+            }
+        }).detach();
+    }
+    break;
         case WM_DESTROY: {
             DeleteObject(hFont);
             if (g_hbgImage) DeleteObject(g_hbgImage);
