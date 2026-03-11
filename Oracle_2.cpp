@@ -44,6 +44,81 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     free(pImageCodecInfo);
     return -1;
 }
+// 1. Die Frequenz-Messung (Goertzel-Filter)
+double CalculateFrequencyMagnitude(const std::vector<uint16_t>& data, size_t start_idx, size_t window_size, double target_freq, double sample_rate) {
+    if (start_idx + window_size > data.size()) return 0.0;
+
+    int k = (int)(0.5 + ((window_size * target_freq) / sample_rate));
+    double omega = (2.0 * 3.14159265358979323846 * k) / window_size;
+    double sine = std::sin(omega);
+    double cosine = std::cos(omega);
+    double coeff = 2.0 * cosine;
+
+    double q0 = 0, q1 = 0, q2 = 0;
+
+    for (size_t i = 0; i < window_size; i++) {
+        double sample = (double)data[start_idx + i]; 
+        q0 = coeff * q1 - q2 + sample;
+        q2 = q1;
+        q1 = q0;
+    }
+
+    return std::sqrt(q1 * q1 + q2 * q2 - q1 * q2 * coeff);
+}
+// --- AETHER AUDIO RADAR (192kHz) ---
+std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
+    std::string report = "\r\n--- AUDIO RADAR (Erste 10 Bloecke) ---\r\n";
+    double sample_rate = 192000.0;
+    size_t window_size = (size_t)(sample_rate * 0.2); // 38400 Messungen = 200ms
+
+    // 1. STEREO-SPLIT & MINUS-WERTE KORRIGIEREN
+    std::vector<double> mono_audio;
+    for (size_t i = 0; i < raw_data.size(); i += 2) {
+        // WICHTIG: Wir zwingen den Wert in einen 'int16_t', damit die Minus-Welle wieder stimmt!
+        int16_t real_audio = (int16_t)raw_data[i];
+        mono_audio.push_back((double)real_audio);
+    }
+
+    if (mono_audio.size() < window_size) return "Audio-Datei zu kurz!";
+
+    // 2. WIR SCANNEN NUR DIE ERSTEN 10 BLÖCKE (2 Sekunden)
+    int blocks_to_check = std::min(10, (int)(mono_audio.size() / window_size));
+
+    for (int i = 0; i < blocks_to_check; i++) {
+        size_t start = i * window_size;
+        
+        // Goertzel-Mathe für 432 Hz
+        int k_0 = (int)(0.5 + ((window_size * 432.0) / sample_rate));
+        double omega_0 = (2.0 * 3.1415926535 * k_0) / window_size;
+        double coeff_0 = 2.0 * std::cos(omega_0);
+        double q1_0 = 0, q2_0 = 0;
+
+        // Goertzel-Mathe für 528 Hz
+        int k_1 = (int)(0.5 + ((window_size * 528.0) / sample_rate));
+        double omega_1 = (2.0 * 3.1415926535 * k_1) / window_size;
+        double coeff_1 = 2.0 * std::cos(omega_1);
+        double q1_1 = 0, q2_1 = 0;
+
+        // Wir gleiten durch die Welle
+        for (size_t j = 0; j < window_size; j++) {
+            double sample = mono_audio[start + j];
+            
+            double q0_0 = coeff_0 * q1_0 - q2_0 + sample;
+            q2_0 = q1_0; q1_0 = q0_0;
+
+            double q0_1 = coeff_1 * q1_1 - q2_1 + sample;
+            q2_1 = q1_1; q1_1 = q0_1;
+        }
+
+        double mag_0 = std::sqrt(q1_0 * q1_0 + q2_0 * q2_0 - q1_0 * q2_0 * coeff_0);
+        double mag_1 = std::sqrt(q1_1 * q1_1 + q2_1 * q2_1 - q1_1 * q2_1 * coeff_1);
+
+        // Wir geben die echten Messwerte aus!
+        report += "Block " + std::to_string(i+1) + " | 432Hz: " + std::to_string((int)mag_0) + "  --  528Hz: " + std::to_string((int)mag_1) + "\r\n";
+    }
+    
+    return report;
+}
 // --- DATENSTRUKTUREN ---
 enum WaterState { DEAD_WATER, LIVING_WATER, TRANSITIONING, UNKNOWN };
 WaterState AnalyzeWaterState(const std::vector<uint16_t>& data, int& outDeadScore, int& outLivingScore) {
@@ -151,6 +226,7 @@ private:
             }
         });
     }
+	
 // Hilfsfunktion: Sucht den passenden Bild-Encoder (z.B. "image/png")
 int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     UINT num = 0, size = 0;
@@ -338,6 +414,59 @@ void InitSignatures() {
         "Immortality Sequence", "Ankh and Infinity. Eternal recurrence activated."});
 }
 };
+
+bool CheckForEasterEgg(const std::vector<uint16_t>& data) {
+    // Die geheime Hex-Signatur für das Wort "A E T H E R"
+    std::vector<uint16_t> secret = {0x0041, 0x0045, 0x0054, 0x0048, 0x0045, 0x0052};
+
+    // Wenn die Datei kürzer ist als unser Wort, direkt abbrechen
+    if (data.size() < secret.size()) return false;
+
+    // Das Gleitfenster: Wir schieben die "Schablone" über alle Daten
+    for (size_t i = 0; i <= data.size() - secret.size(); i++) {
+        bool match = true;
+        
+        // Prüfen, ob die nächsten 6 Zeichen exakt unserem Wort entsprechen
+        for (size_t j = 0; j < secret.size(); j++) {
+            if (data[i + j] != secret[j]) {
+                match = false;
+                break; // Ein falscher Buchstabe -> weitersuchen!
+            }
+        }
+        
+        // Wenn alle 6 Zeichen perfekt gepasst haben:
+        if (match) {
+            return true;
+        }
+    }
+    
+    return false; // Nichts gefunden
+}
+// --- DER TEXT-ZU-WASSER SENDER (Acoustic Modem) ---
+void TransmitMessageToWater(const std::string& message) {
+    const int FREQ_0 = 432; // Frequenz für eine binäre 0
+    const int FREQ_1 = 528; // Frequenz für eine binäre 1
+    const int DURATION = 200; // Dauer pro Bit in Millisekunden (50ms = sehr schnell)
+	
+
+    // Wir gehen jeden Buchstaben der Nachricht einzeln durch
+    for (char c : message) {
+        
+        // Jeder Buchstabe wird in seine 8 Bits (0 und 1) zerlegt
+        for (int i = 7; i >= 0; i--) {
+            int bit = (c >> i) & 1; // Extrahiert das aktuelle Bit
+            
+            if (bit == 1) {
+                Beep(FREQ_1, DURATION); // Sende 528 Hz
+            } else {
+                Beep(FREQ_0, DURATION); // Sende 432 Hz
+            }
+        }
+        
+        // Eine winzige Pause zwischen den Buchstaben, damit das Wasser "atmen" kann
+        Sleep(50); 
+    }
+}
 // --- ANALYSE LOGIK ---
 class EtherAnalyzer {
     OracleDatabase db;
@@ -648,6 +777,15 @@ private:
         if (validGlyphsFound == 0) {
             report << "No known categories or dictionary entries found (only background noise).\r\n";
         }
+		if (CheckForEasterEgg(data)) {
+			report << "\r\n==================================================\r\n";
+			report << " 👁️  SYSTEM ANOMALY DETECTED: HIDDEN MESSAGE FOUND\r\n";
+			report << "==================================================\r\n";
+			report << "   Decoded Hex-Signature: [ 41 45 54 48 45 52 ]\r\n";
+			report << "   Translation: \"A E T H E R\"\r\n";
+			report << "   Message: The architect has left a mark in the void.\r\n";
+			report << "==================================================\r\n";
+		}
         return report.str();
     }
     const CrystalProfile* IdentifyCrystal(const std::vector<uint16_t>& data) {
@@ -680,9 +818,11 @@ private:
                 if (match) results.push_back(std::make_pair(i, &sig));
             }
         }
+		
         return results;
     }
 };
+
 // --- GLOBALE VARIABLEN ---
 HWND hEdit, hStatus, hBtnAnalyze, hBtnBrowse, hBtnMandala;
 char g_filename[260] = {0};
@@ -859,6 +999,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             if (LOWORD(wParam) == ID_BUTTON_FIBONACCI) {
 				if (!g_autoFibonacciActive) {
 					// AKTIVIEREN
+					TransmitMessageToWater("AETHER");
 					g_autoFibonacciActive = true;
 					// Timer starten: Alle 60000 Millisekunden (60 Sekunden)
 					SetTimer(hwnd, ID_TIMER_FIBONACCI, 60000, NULL);
