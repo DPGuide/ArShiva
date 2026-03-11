@@ -69,7 +69,7 @@ double CalculateFrequencyMagnitude(const std::vector<double>& data, size_t start
 // --- AETHER AUDIO RADAR (192kHz) ---
 std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
     std::string report = "\r\n--- AETHER DECODER (192kHz) ---\r\n";
-    double sample_rate = 192000.0;
+    double sample_rate = 48000.0;
     size_t window_size = (size_t)(sample_rate * 0.2); // 38400 Samples
 
     // Diagnose: Wie viel kommt im Orakel an?
