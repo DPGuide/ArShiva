@@ -48,6 +48,12 @@ Alternatively, purchase a USB-C adapter and use your phone as a recording device
 
 <img width="1276" height="716" alt="image" src="https://github.com/user-attachments/assets/58c569e7-75f3-4e59-81d6-90138c288bff" />
 
+<img width="738" height="388" alt="image" src="https://github.com/user-attachments/assets/afda6e30-36d5-4275-beba-2b24cf023754" />
+
+<img width="739" height="388" alt="image" src="https://github.com/user-attachments/assets/e194c674-c128-4e51-853a-9d4048597f01" />
+
+
+
 
 
 
