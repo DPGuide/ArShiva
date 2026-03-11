@@ -295,24 +295,24 @@ private:
             "Amethyst", "Ether", "Spiritual Awareness & Transmutation", 0x3C00, 
             {0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
             {
-                "Stille offenbart die Wahrheit.",
-                "Frieden fließt durch dich.",
-                "Schutz im Licht.",
-                "Wandlung durch Ruhe.",
-                "Klarheit im Geist."
+                "Silence reveals the truth.",
+                "Peace flows through you.",
+                "Protection from the light.",
+                "Transformation through stillness.",
+                "Clarity of mind."
             }
         });
 
         // --- 3. ROSENQUARZ ---
         crystals.push_back({
-            "Rosenquarz", "Water/Heart", "Love & Pulsation", 0x3C00, 
+            "Rose quartz", "Water/Heart", "Love & Pulsation", 0x3C00, 
             {0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
             {
-                "Das Herz kennt den Weg.",
-                "Liebe ist die höchste Schwingung.",
-                "Heilung beginnt im Inneren.",
-                "Sanftmut besiegt Härte.",
-                "Du bist verbunden mit Allem."
+                "The heart knows the way.",
+                "Love is the highest vibration.",
+                "Healing begins within..",
+                "Gentleness conquers harshness.",
+                "You are connected to everything.."
             }
         });
 
@@ -322,10 +322,10 @@ private:
             {0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
             {
                 "Geduld ist die Wurzel des Wissens.",
-                "Atme tief und lass los.",
-                "Die Erde trägt dich.",
-                "Ruhe im Sturm.",
-                "Alles kommt zur rechten Zeit."
+                "Take a deep breath and let go.",
+                "The earth carries you.",
+                "Calm in the storm.",
+                "Everything comes at the right time."
             }
         });
 
@@ -334,24 +334,24 @@ private:
             "Achat", "Earth", "Balance & Shield", 0x3C00, 
             {0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3CFF}, 
             {
-                "Schutz durch Stabilität.",
-                "Finde dein Gleichgewicht.",
-                "Verborgenes wird sichtbar.",
-                "Sicherheit in der Struktur.",
-                "Festigkeit bewahrt den Kern."
+                "Protection through stability.",
+                "Find your balance.",
+                "What is hidden becomes visible.",
+                "Security in the structure.",
+                "Strength preserves the core."
             }
         });
 
         // --- 6. LANDSCHAFTSJASPIS ---
         crystals.push_back({
-            "Landschaftsjaspis", "Earth", "Scenic Balance", 0x3C00, 
+            "Landscape jasper", "Earth", "Scenic Balance", 0x3C00, 
             {0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
             {
-                "Die weite Ebene der Seele.",
-                "Blicke über den Horizont.",
-                "Natur in jedem Atemzug.",
-                "Ruhe des Sedimentgesteins.",
-                "Finde deinen Platz im Ganzen."
+                "The vast plain of the soul.",
+                "Views beyond the horizon.",
+                "Nature in every breath.",
+                "Tranquility of the sedimentary rock.",
+                "Find your place in the whole."
             }
         });
 
@@ -360,11 +360,11 @@ private:
             "Karneol / Aventurin", "Fire", "Vitality & Action", 0x3C00, 
             {0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
             {
-                "Mut ist der Anfang von Allem.",
-                "Handle aus deiner Mitte.",
-                "Das Feuer der Schöpfung.",
-                "Kraft durch Bewegung.",
-                "Deine Energie ist grenzenlos."
+                "Courage is the beginning of everything.",
+                "Act from your center.",
+                "The fire of creation.",
+                "Power through movement.",
+                "Your energy is limitless."
             }
         });
         // --- NEU: TOTES WASSER (Leitungswasser / Druck) ---
