@@ -6,7 +6,6 @@
 #include <gdiplus.h>
 #include <commctrl.h>
 #include <fstream>
-#include <iomanip>
 #include <sstream>
 #include <iomanip>
 #include <vector>
@@ -28,28 +27,6 @@ bool g_autoFibonacciActive = false;
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "gdiplus.lib")
-
-
-// Die automatische Datenbank-Spritze
-void SaveCrystalFingerprint(std::string crystal_name, std::string decoded_text, std::string bits, double contrast_score) {
-    std::ofstream db("aether_database.csv", std::ios::app); // Append-Modus (hängt unten an)
-    if (db.is_open()) {
-        // Wenn die Datei neu ist, schreiben wir einen Header
-        db.seekp(0, std::ios::end);
-        if (db.tellp() == 0) {
-            db << "DATE, STONE, TEXT_RESULT, CONTRAST, BIT_FINGERPRINT\n";
-        }
-        
-        // Den eigentlichen Eintrag schreiben
-        db << "March 2026," 
-           << crystal_name << "," 
-           << "[" << decoded_text << "]," 
-           << std::fixed << std::setprecision(2) << contrast_score << "," 
-           << bits << "\n";
-        db.close();
-    }
-}
-
 // GANZ NACH OBEN DAMIT:
 int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     UINT num = 0, size = 0;
@@ -167,11 +144,6 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
 
     report += "Bits: " + bit_stream + "\r\n";
     report += "RESULT: [" + final_text + "]\r\n";
-	// Hier rufen wir die DB auf (Beispiel für den ersten Test)
-    std::string current_crystal = "Quartz_Test_01"; 
-    SaveCrystalFingerprint(current_crystal, final_text, bit_stream, max_contrast);
-    
-    report += "\r\n>>> FINGERPRINT STORED IN DATABASE <<<\r\n";
     return report;
 }
 // --- DATENSTRUKTUREN ---
