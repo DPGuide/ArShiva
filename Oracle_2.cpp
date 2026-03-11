@@ -45,7 +45,7 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     return -1;
 }
 // 1. Die Frequenz-Messung (Goertzel-Filter)
-double CalculateFrequencyMagnitude(const std::vector<uint16_t>& data, size_t start_idx, size_t window_size, double target_freq, double sample_rate) {
+double CalculateFrequencyMagnitude(const std::vector<double>& data, size_t start_idx, size_t window_size, double target_freq, double sample_rate) {
     if (start_idx + window_size > data.size()) return 0.0;
 
     int k = (int)(0.5 + ((window_size * target_freq) / sample_rate));
@@ -57,7 +57,8 @@ double CalculateFrequencyMagnitude(const std::vector<uint16_t>& data, size_t sta
     double q0 = 0, q1 = 0, q2 = 0;
 
     for (size_t i = 0; i < window_size; i++) {
-        double sample = (double)data[start_idx + i]; 
+        // Hier nehmen wir das Sample jetzt direkt als double
+        double sample = data[start_idx + i]; 
         q0 = coeff * q1 - q2 + sample;
         q2 = q1;
         q1 = q0;
@@ -67,86 +68,79 @@ double CalculateFrequencyMagnitude(const std::vector<uint16_t>& data, size_t sta
 }
 // --- AETHER AUDIO RADAR (192kHz) ---
 std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
-    std::string report = "\r\n--- AUDIO RADAR (First 10 Blocks) ---\r\n";
+    std::string report = "\r\n--- AETHER DECODER (192kHz) ---\r\n";
     double sample_rate = 192000.0;
-    size_t window_size = (size_t)(sample_rate * 0.2); // 200ms
+    size_t window_size = (size_t)(sample_rate * 0.2); // 38400 Samples
 
-    // 1. STEREO-SPLIT & AUDIO-KORREKTUR
-    std::vector<double> mono_audio;
-    for (size_t i = 0; i < raw_data.size(); i += 2) {
-        int16_t real_audio = (int16_t)raw_data[i];
-        mono_audio.push_back((double)real_audio);
+    // Diagnose: Wie viel kommt im Orakel an?
+    report += "Raw data size: " + std::to_string(raw_data.size()) + " Values\r\n";
+
+    if (raw_data.size() < 1000) {
+        return report + "ERROR: File is almost empty! Check recording.\r\n";
     }
 
-    if (mono_audio.size() < window_size) return "Audio-Datei zu kurz!";
+    std::vector<double> mono_audio;
+    // Wir mischen Links und Rechts zu einem starken Mono-Signal
+    for (size_t i = 0; i + 1 < raw_data.size(); i += 2) {
+        int16_t left = (int16_t)raw_data[i];
+        int16_t right = (int16_t)raw_data[i+1];
+        
+        // Durchschnitt bilden, um Übersteuerungen zu vermeiden
+        double mixed = (static_cast<double>(left) + static_cast<double>(right)) / 2.0;
+        mono_audio.push_back(mixed);
+    }
 
-    int total_blocks = (int)(mono_audio.size() / window_size);
+    report += "Mono-Samples: " + std::to_string(mono_audio.size()) + "\r\n";
+
+    // --- SCHRITT 1: DER FLEXIBLE SYNC ---
+    size_t start_offset = 0;      // <--- HIER SIND DIE FEHLENDEN ZEILEN
+    bool found_start = false;     // <--- HIER SIND DIE FEHLENDEN ZEILEN
+    size_t start_searching_at = (size_t)(sample_rate * 0.5); 
+    double sync_threshold = 950000.0; // Wir setzen die Messlatte hoch!
+
+    for (size_t i = start_searching_at; i < mono_audio.size() - window_size; i += (size_t)(sample_rate * 0.005)) {
+        double m0 = CalculateFrequencyMagnitude(mono_audio, i, window_size, 432.0, sample_rate);
+        double m1 = CalculateFrequencyMagnitude(mono_audio, i, window_size, 528.0, sample_rate);
+        
+        if (m0 > sync_threshold || m1 > sync_threshold) {
+            start_offset = i;
+            found_start = true;
+            break; 
+        }
+    }
+
+    if (!found_start) {
+        return report + "STATUS: Silence. No signal above 700k found.\r\n";
+    }
+
+    report += ">>> SYNC LOCK: " + std::to_string(start_offset) + " Samples\r\n";
+
+    // --- SCHRITT 2: DECODIEREN ---
     std::string decoded_text = "";
     int bit_count = 0;
-    char current_char = 0;
+    unsigned char current_char = 0;
+    std::string bit_stream = "";
 
-    // 2. DIE SCHLEIFE ÜBER ALLE BLÖCKE
-    for (int i = 0; i < total_blocks; i++) {
-        size_t start = i * window_size;
+    for (size_t i = start_offset; i <= mono_audio.size() - window_size; i += window_size) {
+        double m0 = CalculateFrequencyMagnitude(mono_audio, i, window_size, 432.0, sample_rate);
+        double m1 = CalculateFrequencyMagnitude(mono_audio, i, window_size, 528.0, sample_rate);
+
+        int bit = (m1 > m0) ? 1 : 0;
+        if (bit_stream.length() < 60) bit_stream += std::to_string(bit) + " ";
         
-        // Goertzel-Berechnung
-        int k_0 = (int)(0.5 + ((window_size * 432.0) / sample_rate));
-        double omega_0 = (2.0 * 3.1415926535 * k_0) / window_size;
-        double coeff_0 = 2.0 * std::cos(omega_0);
-        double q1_0 = 0, q2_0 = 0;
+        current_char = (current_char << 1) | bit;
+        bit_count++;
 
-        int k_1 = (int)(0.5 + ((window_size * 528.0) / sample_rate));
-        double omega_1 = (2.0 * 3.1415926535 * k_1) / window_size;
-        double coeff_1 = 2.0 * std::cos(omega_1);
-        double q1_1 = 0, q2_1 = 0;
-
-        for (size_t j = 0; j < window_size; j++) {
-            double sample = mono_audio[start + j];
-            double q0_0 = coeff_0 * q1_0 - q2_0 + sample;
-            q2_0 = q1_0; q1_0 = q0_0;
-            double q0_1 = coeff_1 * q1_1 - q2_1 + sample;
-            q2_1 = q1_1; q1_1 = q0_1;
+        if (bit_count == 8) {
+            if (current_char >= 32 && current_char <= 126) decoded_text += (char)current_char;
+            else decoded_text += "?"; 
+            bit_count = 0;
+            current_char = 0;
         }
-
-        double mag_0 = std::sqrt(q1_0 * q1_0 + q2_0 * q2_0 - q1_0 * q2_0 * coeff_0);
-        double mag_1 = std::sqrt(q1_1 * q1_1 + q2_1 * q2_1 - q1_1 * q2_1 * coeff_1);
-
-        // RADAR-ANZEIGE (Erste 10 Blöcke)
-        if (i < 10) {
-            report += "Block " + std::to_string(i+1) + " | 432Hz: " + std::to_string((int)mag_0) + "  --  528Hz: " + std::to_string((int)mag_1) + "\r\n";
-        }
-
-        // DECODER-LOGIK (Schwellenwert 400.000)
-        if (mag_0 > 400000 || mag_1 > 400000) {
-            int bit = (mag_1 > mag_0) ? 1 : 0;
-            
-            // Jetzt ist 'bit' bekannt und kann genutzt werden:
-            report += "[BIT RECOGNIZED]: " + std::to_string(bit) + " \r\n";
-            
-            current_char = (current_char << 1) | bit;
-            bit_count++;
-
-            if (bit_count == 8) {
-                if (current_char >= 32 && current_char <= 126) {
-                    decoded_text += current_char;
-                    report += ">>> CHARACTER READY: " + std::string(1, current_char) + "\r\n";
-                } else {
-                    decoded_text += "?";
-                }
-                bit_count = 0;
-                current_char = 0;
-            }
-        }
-    } // HIER endet die Schleife korrekt
-
-    // 3. ABSCHLUSS-BERICHT
-    report += "\r\n--- DECODED MESSAGE ---\r\n";
-    if (decoded_text.empty()) {
-        report += "Status: Not enough bits gathered.\r\n";
-    } else {
-        report += "TEXT: [" + decoded_text + "]\r\n";
     }
-    
+
+    report += "Bits: " + bit_stream + "\r\n";
+    report += "--- RESULT ---\r\nTEXT: [" + decoded_text + "]\r\n";
     return report;
 }
 // --- DATENSTRUKTUREN ---
@@ -508,22 +502,17 @@ public:
     }
 
     std::string AnalyzeFullFile(const std::string& filepath) {
-        std::ifstream in(filepath, std::ios::binary);
+        std::ifstream in(filepath, std::ios::binary | std::ios::ate);
         if (!in) return "Error: File could not be read.";
-
-        std::vector<uint16_t> data;
-        char buf[2];
-        while (in.read(buf, 2)) {
-            uint16_t glyph = (uint8_t)buf[0] | ((uint8_t)buf[1] << 8);
-            data.push_back(glyph);
+        std::streamsize fileSize = in.tellg();
+        in.seekg(0, std::ios::beg);
+        std::vector<uint16_t> data(fileSize / 2);
+        if (in.read(reinterpret_cast<char*>(data.data()), fileSize)) {
         }
         in.close();
-
         if (data.empty()) return "Error: The file is empty.";
-
         return GenerateReport(filepath, data);
     }
-
     std::string GetCategory(uint16_t character) {
         if (character >= 0x4E00 && character <= 0x9FFF) return "Chinese";
         if ((character >= 0x3040 && character <= 0x30FF) || 
