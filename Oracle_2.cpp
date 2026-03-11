@@ -73,9 +73,10 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
     double sample_rate = 48000.0;
     size_t read_window = (size_t)(sample_rate * 0.08); 
     size_t bit_step = (size_t)(sample_rate * 0.2);
-    size_t start_searching_at = (size_t)(sample_rate * 2.0); // 2 Sek Sicherheit
-
-    if (raw_data.size() < (sample_rate * 5)) return report + "ERROR: Aufnahme zu kurz.\r\n";
+    
+    // CRASH-FIX 1: Das Limit auf 1 Sekunde runtergesetzt, damit auch kurze .tba Dateien laden!
+    size_t start_searching_at = (size_t)(sample_rate * 0.5); 
+    if (raw_data.size() < (sample_rate * 1.0)) return report + "ERROR: Aufnahme zu kurz.\r\n";
 
     // 1. Audio zentrieren (DC-Fix)
     std::vector<double> mono_audio;
@@ -88,6 +89,12 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
     mean /= mono_audio.size();
     for (auto& s : mono_audio) s -= mean;
 
+    // CRASH-FIX 2: Verhindert den Speicher-Absturz bei kurzen Dateien
+    size_t search_limit = 0;
+    if (mono_audio.size() > (bit_step * 10)) {
+        search_limit = mono_audio.size() - (bit_step * 10);
+    }
+
     // 2. UNIVERSALER SYNC (Kontrast-Maximierung)
     size_t best_offset = 0;
     double max_contrast = 0;
@@ -95,14 +102,13 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
     report += "Scanning for Signal Contrast...\r\n";
 
     // Wir suchen den Punkt, an dem die Unterscheidung zwischen 0 und 1 am klarsten ist
-    for (size_t i = start_searching_at; i < mono_audio.size() - (bit_step * 10); i += (size_t)(sample_rate * 0.01)) {
+    for (size_t i = start_searching_at; i < search_limit; i += (size_t)(sample_rate * 0.01)) {
         double current_contrast = 0;
-        // Wir testen die nächsten 5 Bits auf ihre "Eindeutigkeit"
         for (int b = 0; b < 5; b++) {
             size_t p = i + (b * bit_step) + (size_t)(bit_step * 0.5);
             double m0 = CalculateFrequencyMagnitude(mono_audio, p, read_window, 432.0, sample_rate);
             double m1 = CalculateFrequencyMagnitude(mono_audio, p, read_window, 528.0, sample_rate);
-            current_contrast += std::abs(m1 - m0); // Je größer die Differenz, desto besser das Signal
+            current_contrast += std::abs(m1 - m0);
         }
 
         if (current_contrast > max_contrast) {
@@ -120,7 +126,6 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
     std::string bit_stream = "";
 
     for (size_t p = best_offset; p + bit_step < mono_audio.size(); p += bit_step) {
-        // Peak-Voting für jedes Bit (3 Messpunkte für Stabilität)
         int votes_for_1 = 0;
         for (double r : {0.4, 0.5, 0.6}) {
             size_t sample_p = p + (size_t)(bit_step * r);
@@ -144,6 +149,69 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
 
     report += "Bits: " + bit_stream + "\r\n";
     report += "RESULT: [" + final_text + "]\r\n";
+
+    // =========================================================
+    // 4. DER ECHTE AETHER-RESONANZ-MAPPER (Dynamische Energie-Hüllkurve)
+    // =========================================================
+    report += "🔮 DOMINANT CRYSTAL: Amethyst\r\n";
+    report += "   Element: Water/Ether\r\n";
+    report += "   Characteristic: Transmutation, Spiritual awareness & Calm resonance\r\n";
+
+    // Wenn du willst, kannst du dem Amethyst einen GANZ eigenen Messbereich geben, 
+    // z.B. 0x4A00 bis 0x4AFF, damit er sich vom Bergkristall unterscheidet!
+    uint16_t target_basis = 0x3C00; 
+    uint16_t target_peak = 0x3CFF;
+    
+    std::stringstream ss_header;
+    ss_header << "   Measuring range: 0x" << std::uppercase << std::hex << target_basis 
+              << " (Basis) to 0x" << target_peak << " (Peak)\r\n\r\n";
+    report += ss_header.str();
+
+    std::vector<double> chunk_peaks(11, 0.0);
+    double global_max_peak = 0.0001; // Verhindert Division durch Null, falls Datei komplett leer
+
+    // 1. ECHTE ENERGIE-MESSUNG: Wir nutzen das zentrierte mono_audio
+    if (mono_audio.size() >= 11) {
+        size_t chunk_size = mono_audio.size() / 11;
+        for (int i = 0; i < 11; i++) {
+            double local_peak = 0.0;
+            size_t start = i * chunk_size;
+            size_t end = start + chunk_size;
+            
+            for (size_t j = start; j < end && j < mono_audio.size(); j++) {
+                // std::abs() gibt uns die echte akustische Auslenkung!
+                double val = std::abs(mono_audio[j]);
+                if (val > local_peak) local_peak = val;
+            }
+            chunk_peaks[i] = local_peak;
+            
+            // Wir merken uns den absolut lautesten Punkt im gesamten File
+            if (local_peak > global_max_peak) global_max_peak = local_peak;
+        }
+    }
+
+    // 2. MAPPING: Stille = Basis, Lautester Punkt = Peak
+    std::vector<uint16_t> hex_blocks;
+    for (int i = 0; i < 11; i++) {
+        // ratio ist jetzt eine saubere Prozentzahl (0.0 bis 1.0) der Lautstärke
+        double ratio = chunk_peaks[i] / global_max_peak; 
+        
+        uint16_t mapped_val = target_basis + (uint16_t)(ratio * (target_peak - target_basis));
+        hex_blocks.push_back(mapped_val);
+    }
+
+    // 3. Den String für dein C++ Array zusammenbauen
+    std::stringstream ss;
+    ss << "Füge dies in deine signatures Liste ein:\r\n{{";
+    for (size_t i = 0; i < 11; i++) {
+        ss << "0x" << std::uppercase << std::hex << std::setfill('0') << std::setw(4) << hex_blocks[i];
+        if (i < 10) ss << ", ";
+    }
+    ss << "},\r\n\"Amethyst\", \"Transmutation, Spiritual awareness & Calm resonance\"});\r\n";
+
+    report += ss.str();
+    report += "==================================================\r\n";
+
     return report;
 }
 // --- DATENSTRUKTUREN ---
@@ -209,18 +277,94 @@ public:
 
 private:
     void InitCrystals() {
-        // --- DEIN BESTEHENDER BERGKRISTALL ---
+        // --- 1. DEIN BESTEHENDER BERGKRISTALL ---
         crystals.push_back({
-            "Rock crystal", 
-            "Ether", 
-            "Clarity, Amplification & Maximum coupling", 
-            0x3C00, 
-            {0x3CFF}, 
+            "Rock crystal", "Ether", "Clarity, Amplification & Maximum coupling", 0x3C00, 
+            {0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3CFF}, 
             {
                 "The crystal rests in its basic resonance. (0x3C00).",
                 "The field achieves maximum coupling (0x3CFF).",
-                "The frequency stabilizes within the CJK spectrum..",
-                "The electromagnetic field resonates in the ether.."
+                "The frequency stabilizes within the CJK spectrum.",
+                "The electromagnetic field resonates in the ether.",
+                "Clarity structure detected."
+            }
+        });
+
+        // --- 2. AMETHYST ---
+        crystals.push_back({
+            "Amethyst", "Ether", "Spiritual Awareness & Transmutation", 0x3C00, 
+            {0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+            {
+                "Stille offenbart die Wahrheit.",
+                "Frieden fließt durch dich.",
+                "Schutz im Licht.",
+                "Wandlung durch Ruhe.",
+                "Klarheit im Geist."
+            }
+        });
+
+        // --- 3. ROSENQUARZ ---
+        crystals.push_back({
+            "Rosenquarz", "Water/Heart", "Love & Pulsation", 0x3C00, 
+            {0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+            {
+                "Das Herz kennt den Weg.",
+                "Liebe ist die höchste Schwingung.",
+                "Heilung beginnt im Inneren.",
+                "Sanftmut besiegt Härte.",
+                "Du bist verbunden mit Allem."
+            }
+        });
+
+        // --- 4. HOWLITH ---
+        crystals.push_back({
+            "Howlith", "Earth/Air", "Patience & Calm", 0x3C00, 
+            {0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+            {
+                "Geduld ist die Wurzel des Wissens.",
+                "Atme tief und lass los.",
+                "Die Erde trägt dich.",
+                "Ruhe im Sturm.",
+                "Alles kommt zur rechten Zeit."
+            }
+        });
+
+        // --- 5. ACHAT ---
+        crystals.push_back({
+            "Achat", "Earth", "Balance & Shield", 0x3C00, 
+            {0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3CFF}, 
+            {
+                "Schutz durch Stabilität.",
+                "Finde dein Gleichgewicht.",
+                "Verborgenes wird sichtbar.",
+                "Sicherheit in der Struktur.",
+                "Festigkeit bewahrt den Kern."
+            }
+        });
+
+        // --- 6. LANDSCHAFTSJASPIS ---
+        crystals.push_back({
+            "Landschaftsjaspis", "Earth", "Scenic Balance", 0x3C00, 
+            {0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+            {
+                "Die weite Ebene der Seele.",
+                "Blicke über den Horizont.",
+                "Natur in jedem Atemzug.",
+                "Ruhe des Sedimentgesteins.",
+                "Finde deinen Platz im Ganzen."
+            }
+        });
+
+        // --- 7. KARNEOL (Oder Aventurin) ---
+        crystals.push_back({
+            "Karneol / Aventurin", "Fire", "Vitality & Action", 0x3C00, 
+            {0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+            {
+                "Mut ist der Anfang von Allem.",
+                "Handle aus deiner Mitte.",
+                "Das Feuer der Schöpfung.",
+                "Kraft durch Bewegung.",
+                "Deine Energie ist grenzenlos."
             }
         });
         // --- NEU: TOTES WASSER (Leitungswasser / Druck) ---
@@ -279,6 +423,10 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     dictionary[0x3C3F] = {"CJK", "Gather", "Convergence", "Focus Point"};
     dictionary[0x3C30] = {"CJK", "Shelter", "Protection", "Stability"};
     dictionary[0x3C00] = {"CJK", "Origin", "Source", "Root Frequency"};
+	dictionary[0x3C57] = {"CJK", "Conceal/Calm", "Inner Peace", "Stable Resonance"};
+	dictionary[0x3CFD] = {"CJK", "Vast Water", "Overflowing Energy", "Release"};
+	dictionary[0x3C8D] = {"CJK", "Fine Wool", "Soft Baseline", "Deep Stillness"};
+	dictionary[0x3C8E] = {"CJK", "Sprouting Down", "Vital Growth", "Active Presence"};
     // --- Tibetan ---
     dictionary[0x0F03] = {"Tibetan", "Sacred Syllable", "Om Energy", "Opening"};
     dictionary[0x0FFC] = {"Tibetan", "Auspicious", "Blessing", "Harmony"};
@@ -400,10 +548,33 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     dictionary[0x263C] = {"Light", "Sun", "life-giving warmth and solar power"};
 	
 }
+
 void InitSignatures() {
     // Original signatures
     signatures.push_back({{0x3CFF, 0x3C3F, 0x0F03, 0x0FFC, 0x0FCF, 0x30FF, 0xCFFF, 0xC03F, 0xC000, 0x3C30, 0x3CFF}, 
         "Crystal Insertion", "Crystal placed in electromagnetic field - resonance begins"});
+	signatures.push_back({{0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+        "Amethyst (Air-Resonance)", "Subtle atmospheric coupling. Stable baseline at 0x3C8E detected in dry environment"});
+	signatures.push_back({{0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+		"Rosenquarz Pulse", "Heart-rhythm detected. Periodic softening to 0x3C8D (Stillness) within active field."});
+	signatures.push_back({{0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3CFF}, 
+		"Rock Crystal (Pure Quarz)", "Clarity & Amplification. Double-pulse rhythm detected (2x 0x3C8D). Active field structuring."});
+	signatures.push_back({{0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+		"Howlith (Calming Presence)", "Grounding resonance detected. Slow 'breathing' pattern (1-3-4 structure). Reduces etheric noise."});
+	signatures.push_back({{0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+		"Karneol (Pure Vitality)", "Uninterrupted energy flow. Maximum stability in the 0x3C8E frequency. No dips detected."});
+	signatures.push_back({{0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8D, 0x3CFF}, 
+		"Aventurin (Spherical)", "Resonant interaction between coils. 5-1-2-2 rhythm. Late-stage double grounding (0x3C8D) detected."});
+	signatures.push_back({{0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+		"Heliotrop (Shield of Vitality)", "Initial grounding (0x3C8D) followed by a solid, protective energy flow. Unshakable focus detected."});
+	signatures.push_back({{0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3CFF}, 
+		"Goldfluss (Man-made)", "Artificial copper-glass matrix. Extreme energy retention (9x 0x3C8E) with a late grounding discharge at 0x3C8D."});
+	signatures.push_back({{0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8D, 0x3C8E, 0x3C8E, 0x3CFF}, 
+		"Yellow Jaspis (Grounded Endurance)", "Deep terrestrial resonance. Characteristic double-dip grounding (2x 0x3C8D) in the third quarter. Stable and protective."});
+	signatures.push_back({{0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+		"Landschaftsjaspis (Scenic Balance)", "Sedimentary layer resonance. Distinct mid-cycle grounding dip (Block 5). Reflects a calm, expansive energy field."});
+	signatures.push_back({{0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3CFF}, 
+		"Achat (Banded Shield)", "Layered resonance structure detected. Double grounding frame (0x3C8D) protecting a stable core. High structural integrity."});
 	signatures.push_back({{0x5A5A, 0x5B5B, 0x5C5C, 0x5A5A, 0x6000, 0x64BB, 0x6000, 0x5A5A, 0x5B5B, 0x5C5C, 0x5A5A}, 
         "Stagnant Grid", "Dead water structure - rigid pipe resonance detected"});
 	signatures.push_back({{0x79E1, 0x7A20, 0x7B50, 0x7D80, 0x7EF6, 0x7F00, 0x7EF6, 0x7D80, 0x7B50, 0x7A20, 0x79E1}, 
@@ -814,19 +985,50 @@ private:
         return report.str();
     }
     const CrystalProfile* IdentifyCrystal(const std::vector<uint16_t>& data) {
-        int bergkristallScore = 0;
-        for (uint16_t glyph : data) {
-            // Echte Signatur prüfen: Bereich 0x3C00 bis 0x3CFF
-            if (glyph >= 0x3C00 && glyph <= 0x3CFF) {
-                bergkristallScore++;
+        const CrystalProfile* bestCrystal = nullptr;
+        int maxHits = 0;
+
+        // 1. Suche in den gemessenen Daten nach unseren exakten 11-Block Mustern
+        for (const auto& crystal : db.crystals) {
+            int hits = 0;
+            // Wir überspringen Wasser-Einträge, da diese keine langen Arrays haben
+            if (crystal.signaturePattern.size() < 11) continue; 
+
+            for (size_t i = 0; i <= data.size() - crystal.signaturePattern.size(); ++i) {
+                bool match = true;
+                for (size_t j = 0; j < crystal.signaturePattern.size(); ++j) {
+                    if (data[i + j] != crystal.signaturePattern[j]) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) hits++; // Wenn das Array perfekt passt -> Treffer!
+            }
+
+            // Der Kristall, der am häufigsten in der Datei gefunden wird, gewinnt
+            if (hits > maxHits) {
+                maxHits = hits;
+                bestCrystal = &crystal;
             }
         }
-        // Wenn Signale in diesem Frequenzband gefunden wurden, ist es der Bergkristall
-        if (bergkristallScore > 0 && !db.crystals.empty()) {
-            return &db.crystals[0]; // Bergkristall
+
+        // 2. Wir haben einen Sieger!
+        if (bestCrystal != nullptr) {
+            return bestCrystal;
         }
-        // Wenn nichts im Bereich 0x3C00-0x3CFF liegt, kennen wir den Kristall (noch) nicht
-        return nullptr; 
+
+        // 3. FALLBACK: Wenn kein exaktes 11er Muster da ist, machen wir es wie früher.
+        // Wenn Resonanz da ist, aber undefinierbar -> Standard Bergkristall.
+        int baseScore = 0;
+        for (uint16_t glyph : data) {
+            if (glyph >= 0x3C00 && glyph <= 0x3CFF) baseScore++;
+        }
+        
+        if (baseScore > 0 && !db.crystals.empty()) {
+            return &db.crystals[0]; // Das ist der Bergkristall an Position 0
+        }
+
+        return nullptr;
     }
     std::vector<std::pair<size_t, const Signature*>> FindSignatures(const std::vector<uint16_t>& data) {
         std::vector<std::pair<size_t, const Signature*>> results;
