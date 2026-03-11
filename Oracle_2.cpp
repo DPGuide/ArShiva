@@ -17,12 +17,10 @@
 #include "resource.h"
 #include <algorithm>
 #include <thread>
-
 #define ID_BUTTON_ANALYZE 2
 #define ID_BUTTON_FIBONACCI 1001
 #define ID_TIMER_FIBONACCI 2001
 bool g_autoFibonacciActive = false;
-
 #pragma comment(lib, "comdlg32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
@@ -48,23 +46,18 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
 // 1. Die Frequenz-Messung (Goertzel-Filter)
 double CalculateFrequencyMagnitude(const std::vector<double>& data, size_t start_idx, size_t window_size, double target_freq, double sample_rate) {
     if (start_idx + window_size > data.size()) return 0.0;
-
     int k = (int)(0.5 + ((window_size * target_freq) / sample_rate));
     double omega = (2.0 * 3.14159265358979323846 * k) / window_size;
     double sine = std::sin(omega);
     double cosine = std::cos(omega);
     double coeff = 2.0 * cosine;
-
     double q0 = 0, q1 = 0, q2 = 0;
-
     for (size_t i = 0; i < window_size; i++) {
-        // Hier nehmen wir das Sample jetzt direkt als double
         double sample = data[start_idx + i]; 
         q0 = coeff * q1 - q2 + sample;
         q2 = q1;
         q1 = q0;
     }
-
     return std::sqrt(q1 * q1 + q2 * q2 - q1 * q2 * coeff);
 }
 // --- AETHER AUDIO RADAR ---
@@ -73,11 +66,8 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
     double sample_rate = 48000.0;
     size_t read_window = (size_t)(sample_rate * 0.08); 
     size_t bit_step = (size_t)(sample_rate * 0.2);
-    
-    // CRASH-FIX 1: Das Limit auf 1 Sekunde runtergesetzt, damit auch kurze .tba Dateien laden!
     size_t start_searching_at = (size_t)(sample_rate * 0.5); 
     if (raw_data.size() < (sample_rate * 1.0)) return report + "ERROR: Aufnahme zu kurz.\r\n";
-
     // 1. Audio zentrieren (DC-Fix)
     std::vector<double> mono_audio;
     double mean = 0;
@@ -88,20 +78,14 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
     }
     mean /= mono_audio.size();
     for (auto& s : mono_audio) s -= mean;
-
-    // CRASH-FIX 2: Verhindert den Speicher-Absturz bei kurzen Dateien
     size_t search_limit = 0;
     if (mono_audio.size() > (bit_step * 10)) {
         search_limit = mono_audio.size() - (bit_step * 10);
     }
-
     // 2. UNIVERSALER SYNC (Kontrast-Maximierung)
     size_t best_offset = 0;
     double max_contrast = 0;
-
     report += "Scanning for Signal Contrast...\r\n";
-
-    // Wir suchen den Punkt, an dem die Unterscheidung zwischen 0 und 1 am klarsten ist
     for (size_t i = start_searching_at; i < search_limit; i += (size_t)(sample_rate * 0.01)) {
         double current_contrast = 0;
         for (int b = 0; b < 5; b++) {
@@ -110,21 +94,17 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
             double m1 = CalculateFrequencyMagnitude(mono_audio, p, read_window, 528.0, sample_rate);
             current_contrast += std::abs(m1 - m0);
         }
-
         if (current_contrast > max_contrast) {
             max_contrast = current_contrast;
             best_offset = i;
         }
     }
-
     report += ">>> SIGNAL LOCK: " + std::to_string(best_offset) + " Samples\r\n";
-
     // 3. DECODIEREN (Ohne Hardcoding)
     std::string final_text = "";
     unsigned char current_char = 0;
     int bit_count = 0;
     std::string bit_stream = "";
-
     for (size_t p = best_offset; p + bit_step < mono_audio.size(); p += bit_step) {
         int votes_for_1 = 0;
         for (double r : {0.4, 0.5, 0.6}) {
@@ -133,63 +113,47 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
             double m1 = CalculateFrequencyMagnitude(mono_audio, sample_p, read_window, 528.0, sample_rate);
             if (m1 > m0) votes_for_1++;
         }
-
         int bit = (votes_for_1 >= 2) ? 1 : 0;
         bit_stream += std::to_string(bit);
-        
         current_char = (current_char << 1) | bit;
         bit_count++;
-
         if (bit_count == 8) {
             final_text += (current_char >= 32 && current_char <= 126) ? (char)current_char : '.';
             bit_count = 0;
             current_char = 0;
         }
     }
-
     report += "Bits: " + bit_stream + "\r\n";
     report += "RESULT: [" + final_text + "]\r\n";
-
     // =========================================================
     // 4. DER ECHTE AETHER-RESONANZ-MAPPER (Dynamische Energie-Hüllkurve)
     // =========================================================
-    
     uint16_t target_basis = 0x3C00; 
     uint16_t target_peak = 0x3CFF;
-    
     std::vector<double> chunk_peaks(11, 0.0);
-    double global_max_peak = 0.0001; // Verhindert Division durch Null, falls Datei komplett leer
-
-    // 1. ECHTE ENERGIE-MESSUNG: Wir nutzen das zentrierte mono_audio
+    double global_max_peak = 0.0001;
     if (mono_audio.size() >= 11) {
         size_t chunk_size = mono_audio.size() / 11;
         for (int i = 0; i < 11; i++) {
             double local_peak = 0.0;
             size_t start = i * chunk_size;
             size_t end = start + chunk_size;
-            
             for (size_t j = start; j < end && j < mono_audio.size(); j++) {
-                // std::abs() gibt uns die echte akustische Auslenkung!
                 double val = std::abs(mono_audio[j]);
                 if (val > local_peak) local_peak = val;
             }
             chunk_peaks[i] = local_peak;
-            
-            // Wir merken uns den absolut lautesten Punkt im gesamten File
             if (local_peak > global_max_peak) global_max_peak = local_peak;
         }
     }
-
     // 2. MAPPING: Stille = Basis, Lautester Punkt = Peak
     std::vector<uint16_t> hex_blocks;
     for (int i = 0; i < 11; i++) {
         // ratio ist jetzt eine saubere Prozentzahl (0.0 bis 1.0) der Lautstärke
-        double ratio = chunk_peaks[i] / global_max_peak; 
-        
+        double ratio = chunk_peaks[i] / global_max_peak;
         uint16_t mapped_val = target_basis + (uint16_t)(ratio * (target_peak - target_basis));
         hex_blocks.push_back(mapped_val);
     }
-
     // 3. SAUBERE AUSGABE DER GEMESSENEN WERTE
     std::stringstream ss;
     ss << "\r\n   Measured Base-Pattern:\r\n   ";
@@ -198,10 +162,8 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
         if (i < 10) ss << " ";
     }
     ss << "\r\n";
-
     report += ss.str();
     report += "==================================================\r\n";
-
     return report;
 }
 // --- DATENSTRUKTUREN ---
@@ -209,7 +171,6 @@ enum WaterState { DEAD_WATER, LIVING_WATER, TRANSITIONING, UNKNOWN };
 WaterState AnalyzeWaterState(const std::vector<uint16_t>& data, int& outDeadScore, int& outLivingScore) {
     outDeadScore = 0;
     outLivingScore = 0;
-
     for (uint16_t glyph : data) {
         if (glyph >= 0x5A5A && glyph <= 0x64BB) {
             outDeadScore++;
@@ -218,7 +179,6 @@ WaterState AnalyzeWaterState(const std::vector<uint16_t>& data, int& outDeadScor
             outLivingScore++;
         }
     }
-
     // Wenn AUCH NUR EIN lebendiges Signal da ist, gewinnt das Leben!
     if (outLivingScore > 0) {
         return LIVING_WATER; 
@@ -226,7 +186,6 @@ WaterState AnalyzeWaterState(const std::vector<uint16_t>& data, int& outDeadScor
     else if (outDeadScore > 0) {
         return DEAD_WATER;
     }
-
     return UNKNOWN;
 }
 struct CrystalProfile {
@@ -237,34 +196,28 @@ struct CrystalProfile {
     std::vector<uint16_t> signaturePattern;
     const char* oracleWisdom[5];
 };
-
 struct GlyphInfo {
     const char* category;
     const char* english;
     const char* mystical;
     const char* crystalResonance;
 };
-
 struct Signature {
     std::vector<uint16_t> pattern;
     const char* name;
     const char* meaning;
 };
-
 // --- DATENBANKEN ---
-
 class OracleDatabase {
 public:
     std::vector<CrystalProfile> crystals;
     std::map<uint16_t, GlyphInfo> dictionary;
     std::vector<Signature> signatures;
-
     OracleDatabase() {
         InitCrystals();
         InitDictionary();
         InitSignatures();
     }
-
 private:
     void InitCrystals() {
         // --- 1. DEIN BESTEHENDER BERGKRISTALL ---
@@ -279,7 +232,6 @@ private:
                 "Clarity structure detected."
             }
         });
-
         // --- 2. AMETHYST ---
         crystals.push_back({
             "Amethyst", "Ether", "Spiritual Awareness & Transmutation", 0x3C00, 
@@ -292,7 +244,6 @@ private:
                 "Clarity of mind."
             }
         });
-
         // --- 3. ROSENQUARZ ---
         crystals.push_back({
             "Rose quartz", "Water/Heart", "Love & Pulsation", 0x3C00, 
@@ -305,7 +256,6 @@ private:
                 "You are connected to everything.."
             }
         });
-
         // --- 4. HOWLITH ---
         crystals.push_back({
             "Howlith", "Earth/Air", "Patience & Calm", 0x3C00, 
@@ -318,7 +268,6 @@ private:
                 "Everything comes at the right time."
             }
         });
-
         // --- 5. ACHAT ---
         crystals.push_back({
             "Achat", "Earth", "Balance & Shield", 0x3C00, 
@@ -331,7 +280,6 @@ private:
                 "Strength preserves the core."
             }
         });
-
         // --- 6. LANDSCHAFTSJASPIS ---
         crystals.push_back({
             "Landscape jasper", "Earth", "Scenic Balance", 0x3C00, 
@@ -344,7 +292,6 @@ private:
                 "Find your place in the whole."
             }
         });
-
         // --- 7. KARNEOL (Oder Aventurin) ---
         crystals.push_back({
             "Karneol / Aventurin", "Fire", "Vitality & Action", 0x3C00, 
@@ -362,8 +309,8 @@ private:
             "Dead Water (Stagnant)", 
             "Lead / Stagnation", 
             "Rigidity, Pressure & Structural Chaos", 
-            0x5A5A, // Deine Untergrenze für totes Wasser
-            {0x64BB}, // Deine Obergrenze
+            0x5A5A,
+            {0x64BB},
             {
                 "Water structure is rigid and disconnected (Stagnant Grid).",
                 "The flow memory is suppressed by pipe pressure.",
@@ -376,8 +323,8 @@ private:
             "Living Water (Silk Matrix)", 
             "Life / Vortex", 
             "Coherence, Harmony & Self-Organization", 
-            0x79E1, // Der Startwert deines Baches
-            {0x7EF6}, // Der Peak deiner "Seiden-Matrix"
+            0x79E1,
+            {0x7EF6},
             {
                 "The silk-thread matrix (U+7EF6) has stabilized.",
                 "Harmonic resonance from the forest source detected.",
@@ -387,7 +334,6 @@ private:
             }
         });
     }
-	
 // Hilfsfunktion: Sucht den passenden Bild-Encoder (z.B. "image/png")
 int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     UINT num = 0, size = 0;
@@ -406,7 +352,6 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     free(pImageCodecInfo);
     return -1;
 }
-
     void InitDictionary() {
     // --- CJK / Kristall-Basis ---
     dictionary[0x3CFF] = {"CJK", "Overflow", "Abundance", "High Resonance"};
@@ -536,9 +481,7 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
     dictionary[0x263F] = {"Planetary", "Mercury", "the fluid communication of the spirit"};
     dictionary[0x26AB] = {"Balance", "Deep Pool", "the silent wisdom of the deep water"};
     dictionary[0x263C] = {"Light", "Sun", "life-giving warmth and solar power"};
-	
 }
-
 void InitSignatures() {
     // Original signatures
     signatures.push_back({{0x3CFF, 0x3C3F, 0x0F03, 0x0FFC, 0x0FCF, 0x30FF, 0xCFFF, 0xC03F, 0xC000, 0x3C30, 0x3CFF}, 
@@ -602,69 +545,48 @@ void InitSignatures() {
         "Immortality Sequence", "Ankh and Infinity. Eternal recurrence activated."});
 }
 };
-
 bool CheckForEasterEgg(const std::vector<uint16_t>& data) {
     // Die geheime Hex-Signatur für das Wort "A E T H E R"
     std::vector<uint16_t> secret = {0x0041, 0x0045, 0x0054, 0x0048, 0x0045, 0x0052};
-
-    // Wenn die Datei kürzer ist als unser Wort, direkt abbrechen
     if (data.size() < secret.size()) return false;
-
-    // Das Gleitfenster: Wir schieben die "Schablone" über alle Daten
     for (size_t i = 0; i <= data.size() - secret.size(); i++) {
         bool match = true;
-        
-        // Prüfen, ob die nächsten 6 Zeichen exakt unserem Wort entsprechen
         for (size_t j = 0; j < secret.size(); j++) {
             if (data[i + j] != secret[j]) {
                 match = false;
-                break; // Ein falscher Buchstabe -> weitersuchen!
+                break;
             }
         }
-        
-        // Wenn alle 6 Zeichen perfekt gepasst haben:
         if (match) {
             return true;
         }
     }
-    
-    return false; // Nichts gefunden
+    return false;
 }
 // --- DER TEXT-ZU-WASSER SENDER (Acoustic Modem) ---
 void TransmitMessageToWater(const std::string& message) {
-    const int FREQ_0 = 432; // Frequenz für eine binäre 0
-    const int FREQ_1 = 528; // Frequenz für eine binäre 1
-    const int DURATION = 200; // Dauer pro Bit in Millisekunden (50ms = sehr schnell)
-	
-
-    // Wir gehen jeden Buchstaben der Nachricht einzeln durch
+    const int FREQ_0 = 432;
+    const int FREQ_1 = 528;
+    const int DURATION = 200;
     for (char c : message) {
-        
-        // Jeder Buchstabe wird in seine 8 Bits (0 und 1) zerlegt
         for (int i = 7; i >= 0; i--) {
-            int bit = (c >> i) & 1; // Extrahiert das aktuelle Bit
-            
+            int bit = (c >> i) & 1;
             if (bit == 1) {
-                Beep(FREQ_1, DURATION); // Sende 528 Hz
+                Beep(FREQ_1, DURATION);
             } else {
-                Beep(FREQ_0, DURATION); // Sende 432 Hz
+                Beep(FREQ_0, DURATION);
             }
         }
-        
-        // Eine winzige Pause zwischen den Buchstaben, damit das Wasser "atmen" kann
-        //Sleep(50); 
     }
 }
 // --- ANALYSE LOGIK ---
 class EtherAnalyzer {
     OracleDatabase db;
     std::mt19937 rng;
-
 public:
     EtherAnalyzer() {
         rng.seed(GetTickCount());
     }
-
     std::string AnalyzeFullFile(const std::string& filepath) {
         std::ifstream in(filepath, std::ios::binary | std::ios::ate);
         if (!in) return "Error: File could not be read.";
@@ -694,72 +616,42 @@ public:
         if (character >= 0x2700 && character <= 0x27BF) return "Dingbats";
         if (character >= 0x3400 && character <= 0x4DBF) return "CJK Ext A";
         if (character >= 0x3100 && character <= 0x312F) return "Bopomofo";
-
         auto it = db.dictionary.find(character);
         if (it != db.dictionary.end()) return it->second.category;
-
         return ""; 
     }
 	std::string GenerateAetherMandala(const std::vector<uint16_t>& data, const std::string& originalFilename) {
     using namespace Gdiplus;
-
     if (data.size() < 10) return "";
-
     int width = 1000;
     int height = 1000;
     float cx = width / 2.0f;
     float cy = height / 2.0f;
-
-    // Erstelle ein unsichtbares Canvas im RAM
     Bitmap bmp(width, height, PixelFormat32bppARGB);
     Graphics g(&bmp);
-
-    // Ganz wichtig für fließende, mystische Linien: Anti-Aliasing aktivieren!
     g.SetSmoothingMode(SmoothingModeAntiAlias);
-
-    // Hintergrund: Das gleiche mystische Dunkelgrau wie dein UI
     g.Clear(Color(255, 15, 15, 20));
-
-    // Pinsel definieren: Ein halbtransparentes Cyan für Rauschen, Gold für Bergkristall
     Pen cyanPen(Color(100, 0, 220, 255), 1.5f); 
-    Pen goldPen(Color(200, 255, 215, 0), 2.0f); 
-
-    // Wir berechnen die Punkte für EINEN Strang des Mandalas
+    Pen goldPen(Color(200, 255, 215, 0), 2.0f);
     std::vector<PointF> basePoints;
-    
-    // Wir nehmen z.B. die ersten 720 Datenpunkte (für eine schöne Dichte)
     size_t pointsToUse = std::min((size_t)720, data.size());
-    
     for (size_t i = 0; i < pointsToUse; i++) {
-        // Wir ziehen die 2-Bit Struktur heraus, um die "Ebene" zu bestimmen
-        int state = (data[i] >> 6) & 0x03; // Gibt 0, 1, 2 oder 3
-        int rawVariance = data[i] & 0xFF;  // Für ein bisschen natürliches Chaos
-
-        // Radius-Berechnung (Entfernung vom Zentrum)
-        // State 0 ist innen, State 3 schlägt weit nach außen aus
+        int state = (data[i] >> 6) & 0x03;
+        int rawVariance = data[i] & 0xFF;
         float radius = 50.0f + (state * 100.0f) + (rawVariance / 2.0f);
-
-        // Winkel-Berechnung: Wir wickeln die Zeitachse als Spirale auf
-        // 3 Umdrehungen verteilt auf die verfügbaren Punkte
         float angleDeg = (i * (360.0f * 3.0f / pointsToUse)); 
-        float angleRad = angleDeg * (3.14159265f / 180.0f); // Umrechnung in Bogenmaß
-
+        float angleRad = angleDeg * (3.14159265f / 180.0f);
         float px = cx + radius * cos(angleRad);
         float py = cy + radius * sin(angleRad);
-        
         basePoints.push_back(PointF(px, py));
     }
-
     // === HIER ENTSTEHT DIE MAGIE DER SYMMETRIE ===
-    // Wir zeichnen den Strang 8 Mal, jedes Mal um 45 Grad gedreht
     for (int sym = 0; sym < 8; sym++) {
         g.ResetTransform();
-        // GDI+ Rotation funktioniert vom Nullpunkt (0,0), also verschieben wir das Zentrum
         g.TranslateTransform(cx, cy);
-        g.RotateTransform(sym * 45.0f); // 8-fache Symmetrie (360 / 8 = 45)
+        g.RotateTransform(sym * 45.0f);
         g.TranslateTransform(-cx, -cy);
         for (size_t i = 1; i < basePoints.size(); i++) {
-            // Wenn der Datenpunkt im Bergkristall-Fenster (0x3C00) liegt, leuchtet er Gold!
             if (data[i] >= 0x3C00 && data[i] <= 0x3CFF) {
                 g.DrawLine(&goldPen, basePoints[i-1], basePoints[i]);
             } else {
@@ -773,31 +665,25 @@ public:
         int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, &outPath[0], (int)outPath.size(), NULL, 0);
         std::wstring wOutPath(sizeNeeded, 0);
         MultiByteToWideChar(CP_UTF8, 0, &outPath[0], (int)outPath.size(), &wOutPath[0], sizeNeeded);
-
         bmp.Save(wOutPath.c_str(), &pngClsid, NULL);
     }
 	return outPath;
 }
-
 private:
     std::string GenerateReport(const std::string& filename, const std::vector<uint16_t>& data) {
         std::stringstream report;
         const CrystalProfile* crystal = IdentifyCrystal(data);
-
         report << "╔══════════════════════════════════════════════════╗\r\n";
         report << "║           ETHER ORACLE COMPLETE ANALYSIS         ║\r\n";
         report << "╚══════════════════════════════════════════════════╝\r\n\r\n";
-        
         report << "📄 FILE: " << filename << "\r\n";
         report << "   Characters read: " << data.size() << " (" << data.size() * 2 << " Bytes)\r\n\r\n";
-
         // 1. Kristall Identifikation (mit Check auf echte Daten)
         if (crystal != nullptr) {
             report << "🔮 DOMINANT CRYSTAL: " << crystal->name << "\r\n";
             report << "   Element: " << crystal->element << "\r\n";
             report << "   Characteristic: " << crystal->property << "\r\n";
             report << "   Measuring range: 0x3C00 (Basis) to 0x3CFF (Peak)\r\n\r\n";
-
             std::uniform_int_distribution<int> dist(0, 4);
             report << "📜 STATUS:\r\n";
             report << "   \"" << crystal->oracleWisdom[dist(rng)] << "\"\r\n\r\n";
@@ -806,14 +692,9 @@ private:
             report << "   (No resonances could be detected in the known band 0x3C00 - 0x3CFF be measured.)\r\n\r\n";
         }
 		// 2.1 Wasser-Matrix Analyse
-		// Wir bereiten zwei leere Variablen vor, die die Funktion für uns füllen soll
 		int deadScore = 0;
 		int livingScore = 0;
-
-		// Jetzt rufen wir die Funktion mit allen DREI Argumenten auf:
-		WaterState waterState = AnalyzeWaterState(data, deadScore, livingScore); 
-
-		// Und hier geben wir das Wasser-Ergebnis aus (inklusive der neuen Debug-Zeile!)
+		WaterState waterState = AnalyzeWaterState(data, deadScore, livingScore);
 		report << "🌊 WATER MATRIX ANALYSIS:\r\n";
 		report << "   [DEBUG] Dead Hits: " << deadScore << " | Living Hits: " << livingScore << "\r\n";
 		report << "🌊 WATER MATRIX ANALYSIS:\r\n";
@@ -850,15 +731,12 @@ private:
         for (auto g : data) variance += pow(g - avg, 2);
         variance /= data.size();
         double chaos = sqrt(variance);
-
         report << "   Average response: U+" << std::hex << std::uppercase << (int)avg << "\r\n";
         report << "   Chaos-Faktor: " << std::dec << std::fixed << std::setprecision(1) << chaos << "\r\n";
-        
         if (chaos < 1000) report << "   -> Very stable, meditative state\r\n";
         else if (chaos < 5000) report << "   -> Balanced, clear flow\r\n";
         else if (chaos < 10000) report << "   -> Dynamic, transformative energy\r\n";
         else report << "   -> Turbulent, major change is imminent\r\n\r\n";
-
         // --- Regionale und Mystische Verteilung (Dynamisch) ---
         std::map<std::string, int> categoryCounts;
         for (auto g : data) {
@@ -867,7 +745,6 @@ private:
                 categoryCounts[cat]++; 
             }
         }
-        
         report << "   Spiritual Signatures (filtered):\r\n";
         if (categoryCounts.empty()) {
             report << "   • No significant patterns were found.\r\n";
@@ -877,7 +754,6 @@ private:
             }
         }
         report << "\r\n";
-
         // 3. Bekannte Muster suchen
         auto sigs = FindSignatures(data);
         report << "🔍 FOUND PATTERNS (SIGNATURES):\r\n";
@@ -889,38 +765,29 @@ private:
                 report << "   Meaning: " << sig->meaning << "\r\n\r\n";
             }
         }
-
         // 4. Detail-Übersetzung (Original mit Erweiterungen)
         report << "=== DETAILED TRANSLATION (Original Timeline) ===\r\n";
-        
         uint16_t lastValue = 0;
-        int validGlyphsFound = 0;            // <--- WICHTIG: Definition wieder da!
-        std::vector<std::string> poemWords;  // <--- WICHTIG: Definition wieder da!
-        
+        int validGlyphsFound = 0;
+        std::vector<std::string> poemWords;
         for (size_t i = 0; i < data.size(); i++) {
             std::string cat = GetCategory(data[i]);
             bool isMystic = (data[i] >= 0x2600 && data[i] <= 0x26FF);
-            
-            if (!cat.empty() && (data[i] != lastValue || isMystic)) { 
-                
+            if (!cat.empty() && (data[i] != lastValue || isMystic)) {
                 if (isMystic) {
                     report << "\r\n[!!!] MYSTISCHE RESONANZ: U+" 
                            << std::hex << std::uppercase << std::setw(4) << data[i] << " [!!!]\r\n";
                 }
-
                 report << "[Position " << std::setw(6) << std::setfill('0') << std::dec << i << "] U+" 
                        << std::hex << std::uppercase << std::setw(4) << data[i]
                        << " | [" << cat << "]";
-                
                 auto it = db.dictionary.find(data[i]);
                 if (it != db.dictionary.end()) {
-                    // Check ob Wort schon im Topf ist
                     if (std::find(poemWords.begin(), poemWords.end(), it->second.mystical) == poemWords.end()) {
                         poemWords.push_back(it->second.mystical);
                     }
                     report << " ---> " << it->second.mystical; 
                 }
-                
                 report << "\r\n";
                 lastValue = data[i]; 
                 validGlyphsFound++;
@@ -930,20 +797,12 @@ private:
         report << "\r\n╔══════════════════════════════════════════════════╗\r\n";
         report << "║               THE SONG OF THE Aether             ║\r\n";
         report << "╚══════════════════════════════════════════════════╝\r\n";
-        
         if (!poemWords.empty()) {
-            // Wir mischen die gefundenen Wörter
             std::shuffle(poemWords.begin(), poemWords.end(), rng);
-            
-            // Wir nutzen den Modulo-Trick (%), damit das Programm nie abstürzt, 
-            // egal wie viele Wörter wir gefunden haben!
             size_t n = poemWords.size();
-            
             report << "   Hidden in the noise, the " << poemWords[0] << ",\r\n";
             report << "   led by " << poemWords[1 % n] << " through time and space.\r\n";
             report << "   The field whispers of " << poemWords[2 % n] << ",\r\n";
-            
-            // Wenn wir unser seltenes drittes Wort haben, kriegt es einen Ehrenplatz:
             if (n >= 3) {
                 report << "   until " << poemWords[n-1] << " completes the circle.\r\n\r\n";
             } else {
@@ -960,7 +819,6 @@ private:
         if (validGlyphsFound == 0) {
             report << "No known categories or dictionary entries found (only background noise).\r\n";
         }
-		// --- HIER SCHALTEN WIR DAS AUDIO-RADAR EIN ---
 			report << DecodeWaterMessage(data);
 			report << "\r\n==================================================\r\n";
 		if (CheckForEasterEgg(data)) {
@@ -975,7 +833,6 @@ private:
         return report.str();
     }
     const CrystalProfile* IdentifyCrystal(const std::vector<uint16_t>& data) {
-        // 1. WIR BERECHNEN ERST DAS 11-BLOCK MUSTER AUS DEN ROHDATEN
         std::vector<double> mono_audio;
         double mean = 0;
         for (size_t i = 0; i + 1 < data.size(); i += 2) {
@@ -983,21 +840,17 @@ private:
             mono_audio.push_back(val);
             mean += val;
         }
-        
         if (!mono_audio.empty()) {
             mean /= mono_audio.size();
             for (auto& s : mono_audio) s -= mean;
         }
-
         std::vector<uint16_t> live_hex;
         if (mono_audio.size() >= 11) {
             size_t chunk_size = mono_audio.size() / 11;
             double global_max = 0.0001;
-            
             for (double val : mono_audio) {
                 if (std::abs(val) > global_max) global_max = std::abs(val);
             }
-
             for (int i = 0; i < 11; i++) {
                 double local_max = 0;
                 size_t start = i * chunk_size;
@@ -1008,43 +861,32 @@ private:
                 live_hex.push_back(0x3C00 + (uint16_t)((local_max / global_max) * 0xFF));
             }
         } else {
-            return nullptr; // Audio zu kurz
+            return nullptr;
         }
-
         // 2. WIR VERGLEICHEN DAS MUSTER MIT DER DATENBANK
         const CrystalProfile* bestMatch = nullptr;
         double minDiff = 99999.0;
-
         for (const auto& crystal : db.crystals) {
-            // Achtung: In deiner Struktur heißt es signaturePattern!
-            if (crystal.signaturePattern.size() != 11) continue; 
-
+            if (crystal.signaturePattern.size() != 11) continue;
             double currentDiff = 0;
             for (int i = 0; i < 11; i++) {
                 currentDiff += std::abs((int)live_hex[i] - (int)crystal.signaturePattern[i]);
             }
-            
             if (currentDiff < minDiff) {
                 minDiff = currentDiff;
                 bestMatch = &crystal;
             }
         }
-
-        // 3. WIR GEBEN DEN GEWINNER ZURÜCK
         if (bestMatch != nullptr) {
             return bestMatch; 
         }
-
-        // 4. FALLBACK: Alter Bergkristall-Check
         int baseScore = 0;
         for (uint16_t glyph : data) {
             if (glyph >= 0x3C00 && glyph <= 0x3CFF) baseScore++;
         }
-        
         if (baseScore > 0 && !db.crystals.empty()) {
             return &db.crystals[0]; 
         }
-
         return nullptr;
     }
     std::vector<std::pair<size_t, const Signature*>> FindSignatures(const std::vector<uint16_t>& data) {
@@ -1062,17 +904,14 @@ private:
                 if (match) results.push_back(std::make_pair(i, &sig));
             }
         }
-		
         return results;
     }
 };
-
 // --- GLOBALE VARIABLEN ---
 HWND hEdit, hStatus, hBtnAnalyze, hBtnBrowse, hBtnMandala;
 char g_filename[260] = {0};
 HFONT hFont;
 EtherAnalyzer analyzer;
-// Grafik-Variablen
 HBITMAP g_hbgImage = NULL;
 HBRUSH g_hbrEditBkgnd = NULL;
 HICON g_hIcon = NULL;
@@ -1120,11 +959,9 @@ void PlayFibonacciResonance() {
     int baseFreq = 528; //528 Hz
     int duration = 150; //150 Millisekunden
     int multiplier = 100; //Pausen in Millisekunden
-    //ersten 10 Fibonacci-Stufen
     for(int i = 0; i < 10; i++) {
         Beep(baseFreq, duration);
         Sleep(a * multiplier);
-        // 3. Berechne die nächste Fibonacci-Zahl (1, 1, 2, 3, 5, 8...)
         next = a + b;
         a = b;
         b = next;
@@ -1134,7 +971,6 @@ void PlayFibonacciResonance() {
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
         case WM_CREATE: {
-            // 1. Icon Laden & Erstes Button
             CreateWindow("BUTTON", "Fibonacci Rythm", 
                          WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON, 
                          10, 100, 150, 30, // x, y, Breite, Höhe
@@ -1145,12 +981,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)g_hIcon);
             }
             g_hbgImage = LoadBitmap(GetModuleHandle(NULL), MAKEINTRESOURCE(IDB_MYBG));
-            //2. Pinsel für Textfeld
             g_hbrEditBkgnd = CreateSolidBrush(RGB(15, 15, 20));
             hFont = CreateFontW(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                 CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Consolas");
-            // UI-Elemente mit absolut sicheren Hex-Codes für Umlaute (Ö = \x00D6, ä = \x00E4)
             hBtnBrowse = CreateWindowExW(0, L"BUTTON", L"OPEN \x00D6" L"FILE...",
                 WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
                 20, 20, 150, 35, hwnd, (HMENU)1, NULL, NULL);
@@ -1254,7 +1088,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     if(a > 100) { a = 1; b = 1; } 
                 }
             }).detach();
-
         } else {
             g_autoFibonacciActive = false;
             KillTimer(hwnd, ID_TIMER_FIBONACCI);
@@ -1264,7 +1097,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     }
     break;
 }
-
 case WM_TIMER:
     if (wParam == ID_TIMER_FIBONACCI && g_autoFibonacciActive) {
         std::thread([]() {
@@ -1305,7 +1137,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
         CW_USEDEFAULT, CW_USEDEFAULT, 1280, 720,
         NULL, NULL, hInst, NULL);
-		// --- GDI+ ENGINE HOCHFAHREN ---
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
     Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
