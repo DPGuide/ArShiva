@@ -153,20 +153,10 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
     // =========================================================
     // 4. DER ECHTE AETHER-RESONANZ-MAPPER (Dynamische Energie-Hüllkurve)
     // =========================================================
-    report += "🔮 DOMINANT CRYSTAL: Amethyst\r\n";
-    report += "   Element: Water/Ether\r\n";
-    report += "   Characteristic: Transmutation, Spiritual awareness & Calm resonance\r\n";
-
-    // Wenn du willst, kannst du dem Amethyst einen GANZ eigenen Messbereich geben, 
-    // z.B. 0x4A00 bis 0x4AFF, damit er sich vom Bergkristall unterscheidet!
+    
     uint16_t target_basis = 0x3C00; 
     uint16_t target_peak = 0x3CFF;
     
-    std::stringstream ss_header;
-    ss_header << "   Measuring range: 0x" << std::uppercase << std::hex << target_basis 
-              << " (Basis) to 0x" << target_peak << " (Peak)\r\n\r\n";
-    report += ss_header.str();
-
     std::vector<double> chunk_peaks(11, 0.0);
     double global_max_peak = 0.0001; // Verhindert Division durch Null, falls Datei komplett leer
 
@@ -200,14 +190,14 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
         hex_blocks.push_back(mapped_val);
     }
 
-    // 3. Den String für dein C++ Array zusammenbauen
+    // 3. SAUBERE AUSGABE DER GEMESSENEN WERTE
     std::stringstream ss;
-    ss << "Füge dies in deine signatures Liste ein:\r\n{{";
+    ss << "\r\n   Measured Base-Pattern:\r\n   ";
     for (size_t i = 0; i < 11; i++) {
         ss << "0x" << std::uppercase << std::hex << std::setfill('0') << std::setw(4) << hex_blocks[i];
-        if (i < 10) ss << ", ";
+        if (i < 10) ss << " ";
     }
-    ss << "},\r\n\"Amethyst\", \"Transmutation, Spiritual awareness & Calm resonance\"});\r\n";
+    ss << "\r\n";
 
     report += ss.str();
     report += "==================================================\r\n";
@@ -293,7 +283,7 @@ private:
         // --- 2. AMETHYST ---
         crystals.push_back({
             "Amethyst", "Ether", "Spiritual Awareness & Transmutation", 0x3C00, 
-            {0x3C8D, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3CFF}, 
+            {0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8E, 0x3C8D, 0x3C8E, 0x3C8D, 0x3C8E, 0x3CFF}, 
             {
                 "Silence reveals the truth.",
                 "Peace flows through you.",
@@ -985,47 +975,74 @@ private:
         return report.str();
     }
     const CrystalProfile* IdentifyCrystal(const std::vector<uint16_t>& data) {
-        const CrystalProfile* bestCrystal = nullptr;
-        int maxHits = 0;
+        // 1. WIR BERECHNEN ERST DAS 11-BLOCK MUSTER AUS DEN ROHDATEN
+        std::vector<double> mono_audio;
+        double mean = 0;
+        for (size_t i = 0; i + 1 < data.size(); i += 2) {
+            double val = (static_cast<double>((int16_t)data[i]) + static_cast<double>((int16_t)data[i+1])) / 2.0;
+            mono_audio.push_back(val);
+            mean += val;
+        }
+        
+        if (!mono_audio.empty()) {
+            mean /= mono_audio.size();
+            for (auto& s : mono_audio) s -= mean;
+        }
 
-        // 1. Suche in den gemessenen Daten nach unseren exakten 11-Block Mustern
-        for (const auto& crystal : db.crystals) {
-            int hits = 0;
-            // Wir überspringen Wasser-Einträge, da diese keine langen Arrays haben
-            if (crystal.signaturePattern.size() < 11) continue; 
+        std::vector<uint16_t> live_hex;
+        if (mono_audio.size() >= 11) {
+            size_t chunk_size = mono_audio.size() / 11;
+            double global_max = 0.0001;
+            
+            for (double val : mono_audio) {
+                if (std::abs(val) > global_max) global_max = std::abs(val);
+            }
 
-            for (size_t i = 0; i <= data.size() - crystal.signaturePattern.size(); ++i) {
-                bool match = true;
-                for (size_t j = 0; j < crystal.signaturePattern.size(); ++j) {
-                    if (data[i + j] != crystal.signaturePattern[j]) {
-                        match = false;
-                        break;
-                    }
+            for (int i = 0; i < 11; i++) {
+                double local_max = 0;
+                size_t start = i * chunk_size;
+                size_t end = (i == 10) ? mono_audio.size() : (i + 1) * chunk_size;
+                for (size_t j = start; j < end; j++) {
+                    if (std::abs(mono_audio[j]) > local_max) local_max = std::abs(mono_audio[j]);
                 }
-                if (match) hits++; // Wenn das Array perfekt passt -> Treffer!
+                live_hex.push_back(0x3C00 + (uint16_t)((local_max / global_max) * 0xFF));
             }
+        } else {
+            return nullptr; // Audio zu kurz
+        }
 
-            // Der Kristall, der am häufigsten in der Datei gefunden wird, gewinnt
-            if (hits > maxHits) {
-                maxHits = hits;
-                bestCrystal = &crystal;
+        // 2. WIR VERGLEICHEN DAS MUSTER MIT DER DATENBANK
+        const CrystalProfile* bestMatch = nullptr;
+        double minDiff = 99999.0;
+
+        for (const auto& crystal : db.crystals) {
+            // Achtung: In deiner Struktur heißt es signaturePattern!
+            if (crystal.signaturePattern.size() != 11) continue; 
+
+            double currentDiff = 0;
+            for (int i = 0; i < 11; i++) {
+                currentDiff += std::abs((int)live_hex[i] - (int)crystal.signaturePattern[i]);
+            }
+            
+            if (currentDiff < minDiff) {
+                minDiff = currentDiff;
+                bestMatch = &crystal;
             }
         }
 
-        // 2. Wir haben einen Sieger!
-        if (bestCrystal != nullptr) {
-            return bestCrystal;
+        // 3. WIR GEBEN DEN GEWINNER ZURÜCK
+        if (bestMatch != nullptr) {
+            return bestMatch; 
         }
 
-        // 3. FALLBACK: Wenn kein exaktes 11er Muster da ist, machen wir es wie früher.
-        // Wenn Resonanz da ist, aber undefinierbar -> Standard Bergkristall.
+        // 4. FALLBACK: Alter Bergkristall-Check
         int baseScore = 0;
         for (uint16_t glyph : data) {
             if (glyph >= 0x3C00 && glyph <= 0x3CFF) baseScore++;
         }
         
         if (baseScore > 0 && !db.crystals.empty()) {
-            return &db.crystals[0]; // Das ist der Bergkristall an Position 0
+            return &db.crystals[0]; 
         }
 
         return nullptr;
@@ -1073,7 +1090,7 @@ void BrowseFile(HWND hwnd) {
     ofn.lStructSize = sizeof(ofn);
     ofn.lpstrFile = g_filename;
     ofn.nMaxFile = sizeof(g_filename);
-    ofn.lpstrFilter = "Raw/Text Files\0*.raw;*.txt\0All Files\0*.*\0";
+    ofn.lpstrFilter = "TBA/Text Files\0*.tba;*.txt\0All Files\0*.*\0";
     ofn.Flags = OFN_FILEMUSTEXIST;
     if (GetOpenFileNameA(&ofn)) {
         SetWindowTextA(hStatus, g_filename);
