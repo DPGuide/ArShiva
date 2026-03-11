@@ -50,7 +50,9 @@ Alternatively, purchase a USB-C adapter and use your phone as a recording device
 
 <img width="738" height="388" alt="image" src="https://github.com/user-attachments/assets/afda6e30-36d5-4275-beba-2b24cf023754" />
 
-<img width="739" height="388" alt="image" src="https://github.com/user-attachments/assets/e194c674-c128-4e51-853a-9d4048597f01" />
+***the word schould be aether , but yeah d.j is funny / needs more test and diffrent test***
+<img width="739" height="388" alt="image" src="https://github.com/user-attachments/assets/ef6ff61b-3dab-4fbb-a6b0-a20ca678063e" />
+
 
 
 
