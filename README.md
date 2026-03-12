@@ -40,7 +40,7 @@ Alternatively, purchase a USB-C adapter and use your phone as a recording device
 
 ***Tools at youre PC***
 
-***oh yeah , sry CMD for the Oracle "g++ -o oracle.exe oracle_2.cpp resource.o -mwindows -lcomdlg32 -luser32 -lgdi32 -lgdiplus"***
+***oh yeah , sry CMD for the Oracle "g++ -o oracle.exe oracle_2.cpp monitor.cpp resource.o -mwindows -lcomdlg32 -luser32 -lgdi32 -lgdiplus -lwinmm"***
 
 <img width="321" height="508" alt="image" src="https://github.com/user-attachments/assets/d0592ede-ed5e-4a3e-9b55-7426acde7494" />
 
