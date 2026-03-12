@@ -17,6 +17,8 @@
 #include "resource.h"
 #include <algorithm>
 #include <thread>
+#include "monitor.h"
+#define ID_BUTTON_MONITOR 5
 #define ID_BUTTON_ANALYZE 2
 #define ID_BUTTON_FIBONACCI 1001
 #define ID_TIMER_FIBONACCI 2001
@@ -164,6 +166,11 @@ std::string DecodeWaterMessage(const std::vector<uint16_t>& raw_data) {
     ss << "\r\n";
     report += ss.str();
     report += "==================================================\r\n";
+    // (In DecodeWaterMessage, am Ende)
+    g_monitorWave = mono_audio; 
+    g_monitorHex = hex_blocks;    
+    if (hMonitorWindow != NULL) InvalidateRect(hMonitorWindow, NULL, TRUE); // Monitor zum Neu-Zeichnen zwingen
+    
     return report;
 }
 // --- DATENSTRUKTUREN ---
@@ -1006,6 +1013,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
                 20, 200, 740, 390, hwnd, NULL, NULL, NULL);
             SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+			HWND hBtnMonitor = CreateWindowExW(0, L"BUTTON", L"LIVE MONITOR",
+                WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+                500, 20, 150, 35, hwnd, (HMENU)ID_BUTTON_MONITOR, NULL, NULL);
+            SendMessage(hBtnMonitor, WM_SETFONT, (WPARAM)hFont, TRUE);
             return 0;
         }
         case WM_ERASEBKGND: {
@@ -1073,6 +1084,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     }
                 }
             }
+			if (LOWORD(wParam) == ID_BUTTON_MONITOR) {
+                if (hMonitorWindow == NULL) { 
+                    hMonitorWindow = CreateWindowExW(0, L"MonitorClass", L"Aether Oscilloscope",
+                        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 300, 
+                        hwnd, NULL, GetModuleHandle(NULL), NULL);
+                }
+                ShowWindow(hMonitorWindow, SW_SHOW);
+                UpdateWindow(hMonitorWindow);
+            }
             if (LOWORD(wParam) == ID_BUTTON_FIBONACCI) {
         if (!g_autoFibonacciActive) {
             g_autoFibonacciActive = true;
@@ -1133,6 +1153,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     wc.hIcon   = hIconBig;
     wc.hIconSm = hIconSmall;
     RegisterClassExW(&wc);
+    RegisterMonitorClass(hInst);
     HWND hwnd = CreateWindowExW(0, L"EtherOracleClass", L"\x00C4" L"ther-Oracle - Master Decoder \xD83D\xDD2E",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE,
         CW_USEDEFAULT, CW_USEDEFAULT, 1280, 720,
